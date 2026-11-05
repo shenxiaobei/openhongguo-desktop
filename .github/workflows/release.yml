@@ -1,11 +1,7 @@
-# Builds openhongguo-cli, the ohg command, for macOS, Linux and Windows and attaches
-# the archives and their checksums to a GitHub Release. It runs when a
-# release is published, and by hand for a release that already exists.
-name: release
+# 保留上游 CLI 的手动构建入口，避免桌面版发布时自动附加 CLI 成品。
+name: CLI release (manual)
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:

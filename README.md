@@ -1,484 +1,150 @@
-# openhongguo
+# 红果原生桌面版
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/beilunyang/openhongguo/sdk.svg)](https://pkg.go.dev/github.com/beilunyang/openhongguo/sdk)
-[![npm](https://img.shields.io/npm/v/openhongguo)](https://www.npmjs.com/package/openhongguo)
-[![npm react-native](https://img.shields.io/npm/v/react-native-openhongguo?label=npm%20react-native)](https://www.npmjs.com/package/react-native-openhongguo)
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.beilunyang/openhongguo)](https://central.sonatype.com/artifact/io.github.beilunyang/openhongguo)
-[![pub.dev](https://img.shields.io/pub/v/openhongguo)](https://pub.dev/packages/openhongguo)
-[![CI](https://github.com/beilunyang/openhongguo/actions/workflows/ci.yml/badge.svg)](https://github.com/beilunyang/openhongguo/actions/workflows/ci.yml)
+**OpenHongguo Desktop · v0.3.7 · Windows 10 / 11 x64**
 
-[![npm downloads](https://img.shields.io/npm/d18m/openhongguo?label=npm%20downloads)](https://www.npmjs.com/package/openhongguo)
-[![react-native downloads](https://img.shields.io/npm/d18m/react-native-openhongguo?label=react-native%20downloads)](https://www.npmjs.com/package/react-native-openhongguo)
-[![pub downloads](https://img.shields.io/pub/dm/openhongguo?label=pub%20downloads)](https://pub.dev/packages/openhongguo)
-[![CLI downloads](https://img.shields.io/github/downloads/beilunyang/openhongguo/total?label=CLI%20downloads)](https://github.com/beilunyang/openhongguo/releases)
+一个使用 WPF 原生窗口、内嵌视频播放器的 Windows 短剧客户端。支持搜索找剧、题材筛选、排行榜、连续推荐、选集播放和观看记录。
 
-openhongguo 是红果短剧（Hongguo）的非官方 SDK，提供 Go、Node.js、Android、iOS、React Native 和 Flutter 版本。SDK 可以浏览短剧目录、搜索短剧、读取短剧和分集的详情，并取得分集的播放地址和内容密钥。
+本项目基于并借鉴 [beilunyang/openhongguo](https://github.com/beilunyang/openhongguo) 二次开发，保留原作者版权与许可证；Windows 原生桌面功能在其 SDK 基础上扩展。
 
-SDK 用匿名设备发送所有请求，不需要登录。Go 以外的 SDK 都由 Go SDK 编译而成，所以各语言的行为相同。
+下载成品后双击 `红果原生桌面版.exe` 即可使用。.NET 桌面运行时、SDK 桥和视频组件已内置，使用时无需另装 Edge、mpv、ffplay 或 ffmpeg。
 
-> **免责声明**
->
-> 请以学习为目的使用本仓库。
->
-> 本仓库的所有内容仅供学习和参考之用，禁止用于商业用途。任何人或组织不得将本仓库的内容用于非法用途或侵犯他人合法权益。
->
-> 本仓库所涉及的接口分析与调用技术仅用于学习和研究，不得用于对其他平台进行大规模数据采集或其他非法行为。
->
-> 对于因使用本仓库内容而引起的任何法律责任，本仓库不承担任何责任。使用本仓库的内容即表示您同意本免责声明的所有条款和条件。
->
-> 详细的免责声明见[文末](#免责声明)。
+## 功能
+
+| 功能 | 当前实现 |
+|---|---|
+| 搜索与发现 | 按剧名或关键词搜索，支持「剧集 / 综合 / 视频」分类和分页；新搜索回到列表顶部 |
+| 按题材找剧 | 组合选择平台提供的体裁、主题、人物设定、故事背景等条件 |
+| 排行榜 | 剧目逐行展示名次、封面与热度；顶部横向切换榜单，支持题材筛选、加载更多和每日刷新 |
+| 连续推荐 | 连续加载候选内容，在视频区域用滚轮或 ↑ / ↓ 切换另一部剧 |
+| 播放控制 | 拖动进度、暂停、音量、0.5–3 倍速，以及当前分集实际提供的画质档位 |
+| 自动连播 | 提前缓冲同一季的下一集；确认官方合集关系及下一季可播放时，支持同系列跨季连播 |
+| 观看记录 | 带封面的并列卡片，保存集数与播放位置，继续上次观看 |
+| 窗口适配 | 视频保持比例，支持竖屏和横屏；小窗口收拢侧栏与次要控制，应用不设置最小宽高 |
+| 沉浸播放 | 窗口内全屏和屏幕全屏；透明控制栏，静止约 3 秒后隐藏控制栏与鼠标 |
+| 封面与统计 | 解码平台真实海报；展示接口提供的播放、追剧、本集点赞和评论数量 |
+
+画质选项随具体分集变化。评论正文、弹幕内容和收藏量尚未接入；接口缺失的统计值显示为 `—`，追剧数与收藏数分别处理。
+
+## 下载与运行
+
+在[本仓库 Releases](https://github.com/shenxiaobei/openhongguo-desktop/releases) 页面选择 **Windows x64 完整分发包**。当前版本的文件约定如下：
+
+| 文件 | 用途 |
+|---|---|
+| `红果原生桌面版-v0.3.7-windows-x64.zip` | 使用者下载的完整分发包，包含 EXE、说明和许可证 |
+| `openhongguo-native-runtime-v0.3.7-windows-x64.zip` | 开发者从源码构建时使用的原生运行库包 |
+
+1. 解压完整分发包，双击 `红果原生桌面版.exe`。
+2. 在「发现」「排行榜」或搜索结果中点击剧目，进入播放页。
+3. 通过选集、进度条、倍速和画质菜单调整观看；小窗口下部分设置位于「更多」。
+4. 退出时保存观看进度，下次从「观看记录」继续。
+
+请保留分发包中的第三方许可证和组件来源说明。当前本地交付的两个 ZIP 位于源码目录同级的 `Releases/`，发布仓库时将它们作为 Release 附件上传。
+
+首次启动会校验并释放内置运行组件，耗时可能比后续启动更长。成品以单 EXE 交付，运行时仍会创建组件、封面、配置和历史文件。
+
+## 播放操作
+
+| 操作 | 效果 |
+|---|---|
+| 空格 | 暂停 / 继续 |
+| ← / → | 快退 / 快进 5 秒 |
+| 播放器右下角全屏按钮 | 窗口内全屏，视频铺满当前窗口客户区，保留系统标题栏及窗口大小 |
+| 标题栏最大化按钮 | 系统窗口最大化 / 还原 |
+| F11 或双击视频 | 进入 / 退出屏幕全屏 |
+| Esc | 先退出屏幕全屏，再退出窗口内全屏 |
+| 视频区域滚轮或 ↑ / ↓ | 在「连续推荐」模式中切换另一部剧 |
+
+两种沉浸模式下，移动鼠标或操作快捷键会重新显示控制栏；拖动进度、悬停控制区或打开菜单时保持可见。视频始终保持原始比例，空余区域保留黑边。窗口可继续缩小，但原生标题栏仍受 Windows 系统边界约束。
+
+## 连播、推荐与排行榜
+
+- **下一集预加载**：开启自动连播时，备用播放器提前静音缓冲并准备首帧，就绪后交接；播放地址失效或准备不足时走正常加载流程。切换其他剧目、关闭连播或退出时取消旧准备。
+- **跨季连播**：依据平台返回的官方合集 ID、季序和分集信息确认下一季。当前季完结且末集播放结束后接续；相似剧名不作为续季依据。跨季目前预取关联信息，媒体在切季时加载。
+- **推荐来源**：使用平台发现、热门目录和相关推荐接口，内容随匿名设备及服务端响应变化。推荐暂不可用时可显示同频道的热门目录，并注明来源。
+- **每日榜单刷新**：应用运行期间每分钟检查本地日期，跨天刷新当前榜单；返回过期榜单也会更新。失败时保留旧列表，约 10 分钟后重试；支持手动刷新。此功能刷新榜单内容，软件版本更新需要另行下载。
+
+## 本地数据与缓存
+
+| 位置 | 内容 |
+|---|---|
+| `%APPDATA%\openhongguo` | 匿名设备配置、观看记录、目录缓存等 |
+| `%LOCALAPPDATA%\OpenHongguo\covers` | 封面图片缓存 |
+| `%LOCALAPPDATA%\OpenHongguo\native` | 从 EXE 释放的 SDK 桥和视频运行组件 |
+| `%TEMP%\.net\红果原生桌面版` | .NET 单文件程序解包内容 |
+
+视频预加载使用内存，明确关闭磁盘视频缓存。每个播放器的前向媒体缓存上限为 24 MiB，另有 4 MiB 回退缓存；约 12 秒为预读目标，解码帧、音频和 GPU 还会占用额外内存。停止或销毁播放器时释放对应媒体。
+
+封面缓存的 24 小时有效期用于判断是否复用，目前没有统一的过期删除或容量限制；旧运行组件也可能保留。需要重置时先退出应用，再清理上述目录；删除 `%APPDATA%\openhongguo` 会同时清空观看记录和匿名设备配置。
+
+## 技术实现
+
+- **界面**：C# / .NET 9 / WPF，原生 Windows 窗口。
+- **播放**：进程内加载 libmpv，将视频输出到原生窗口句柄；内置其所需的视频组件。
+- **接口**：基于 OpenHongguo Go SDK，通过私有标准输入输出 JSONL 管道连接内置桥接进程。
+- **海报**：Magick.NET 解码，包括平台返回的 HEIC / HEIF / AVIF 图片。
+- **分发**：Windows x64、自包含、单文件 EXE；应用运行时不创建本地 HTTP 服务，也不启动浏览器。
+
+当前网络请求沿用匿名设备机制。目录、榜单、画质和可播放状态取决于平台响应，服务端要求验证、限流或调整接口时可能出现相应提示。项目为非官方客户端，与红果官方无隶属关系。
+
+## 从源码构建
+
+构建环境：**Windows x64、Go 1.22+、.NET 9 SDK、PowerShell**，以及恢复 NuGet 依赖所需的网络连接。运行成品无需安装这些开发工具。
+
+源码保留运行库的许可证和头文件，DLL 通过单独的运行库 ZIP 分发。先将 `openhongguo-native-runtime-v0.3.7-windows-x64.zip` 放入源码同级的 `Releases/`，然后在仓库根目录执行：
+
+```powershell
+Expand-Archive -LiteralPath '..\Releases\openhongguo-native-runtime-v0.3.7-windows-x64.zip' -DestinationPath '.' -Force
+powershell -File scripts/build-native.ps1
+```
+
+脚本校验原生 DLL 的 SHA256，构建 Go 桥，再发布包含 .NET 运行时及原生组件的桌面程序。默认产物：
+
+```text
+dist/
+├─ native-windows-amd64/
+│  ├─ 红果原生桌面版.exe
+│  ├─ 使用说明.md
+│  ├─ 第三方组件来源.md
+│  ├─ LICENSE
+│  └─ 第三方许可证/
+└─ 红果原生桌面版-windows-x64.zip
+```
+
+运行库来源、校验值和许可证见[原生桌面版说明](docs/native-desktop.md#源码与构建)及[第三方组件来源](docs/native-components.md)。旧浏览器入口源码与脚本保留供回溯，当前 Windows 桌面版使用 `scripts/build-native.ps1` 构建。
+
+## 源码目录
+
+```text
+native/Hongguo.Desktop/    WPF 界面、播放器与桌面状态管理
+native/runtime/            原生组件许可证、NOTICE 和 mpv 头文件
+native/verification/       桌面功能验证代码
+cmd/ohg-native-bridge/      Go SDK 桥入口
+internal/nativebridge/     管道协议与 SDK 调用
+sdk/                       SDK 与官方系列关联查询
+adapters/                  匿名设备持久化等适配逻辑
+scripts/                   构建及验证脚本
+docs/                      使用、构建与开发文档
+bindings/                  保留的多语言 SDK 绑定
+```
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
-| [类型参考](docs/types.md) | 所有返回值和查询参数的字段 |
-| [Go 包文档](https://pkg.go.dev/github.com/beilunyang/openhongguo/sdk) | Go SDK 的完整 API |
-| [命令行文档](docs/cli.md) | 命令行工具 openhongguo-cli（命令 `ohg`）的用法 |
-| [开发说明](docs/development.md) | 接口契约检查和持续集成 |
-| [发布手册](docs/release.md) | 发布新版本的步骤 |
+| [原生桌面版说明](docs/native-desktop.md) | 详细操作、预加载、数据行为及构建 |
+| [第三方组件来源](docs/native-components.md) | 视频及图片组件版本、哈希与许可证 |
+| [界面设计记录](docs/native-ui-design.md) | 桌面界面设计与交互说明 |
+| [SDK 开发参考](docs/sdk.md) | 保留的 SDK 用法、方法表与错误表 |
+| [SDK 类型参考](docs/types.md) | 查询参数与返回类型 |
+| [CLI 参考](docs/cli.md) | 保留的 `ohg` 命令行入口 |
 
-## 安装
+SDK 参考中的方法表和错误表由 `go run ./bindings/docgen` 维护；桌面项目首页单独编写。
 
-| 语言 | 包 | 安装 | 文档 |
-|---|---|---|---|
-| Go | [`github.com/beilunyang/openhongguo`](https://pkg.go.dev/github.com/beilunyang/openhongguo/sdk) | `go get github.com/beilunyang/openhongguo@latest` | 本文 |
-| Node.js | [`openhongguo`](https://www.npmjs.com/package/openhongguo) | `npm install openhongguo` | [bindings/node](bindings/node/README.md) |
-| Android（Kotlin） | [`io.github.beilunyang:openhongguo`](https://central.sonatype.com/artifact/io.github.beilunyang/openhongguo) | `implementation("io.github.beilunyang:openhongguo:0.2.0")` | [bindings/mobile](bindings/mobile/README.md) |
-| iOS / macOS（Swift） | Swift Package | `.package(url: "https://github.com/beilunyang/openhongguo.git", from: "0.2.0")` | [bindings/mobile](bindings/mobile/README.md) |
-| React Native | [`react-native-openhongguo`](https://www.npmjs.com/package/react-native-openhongguo) | `npx expo install react-native-openhongguo` | [bindings/react-native](bindings/react-native/README.md) |
-| Flutter | [`openhongguo`](https://pub.dev/packages/openhongguo) | `flutter pub add openhongguo` | [bindings/flutter](bindings/flutter/README.md) |
+## 来源与许可证
 
-## 要求
+本项目基于 [beilunyang/openhongguo](https://github.com/beilunyang/openhongguo) 二次开发，感谢原作者提供 SDK、协议实现和多语言基础。当前仓库在此基础上增加 Windows 原生桌面界面、内嵌播放、预加载、跨季连播和桌面交互等功能。Go 模块路径沿用上游，以保持现有导入兼容。
 
-| 语言 | 最低版本 |
-|---|---|
-| Go | 1.22 |
-| Node.js | 20 |
-| Android | 5.0（API 21）；Flutter 是 7.0（API 24） |
-| iOS | 13；React Native 是 15.1，Flutter 是 15 |
-| macOS | 11 |
+仓库沿用 [Apache License 2.0](LICENSE)，保留上游版权声明。随程序分发的 libmpv、FFmpeg、Vulkan Loader、Magick.NET 等组件分别遵循各自许可证；其中当前 libmpv 构建按 GPLv2+ 分发，完整组件来源与许可见[第三方组件说明](docs/native-components.md)及分发包内的许可证文件。
 
-## 快速上手
-
-```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-
-	"github.com/beilunyang/openhongguo/adapters"
-	"github.com/beilunyang/openhongguo/sdk"
-)
-
-func main() {
-	ctx := context.Background()
-	client, err := adapters.NewClient("anonymous.json", sdk.Options{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	page, err := client.Search(ctx, "全球死考", sdk.SearchOptions{})
-	if err != nil {
-		log.Fatal(err)
-	}
-	episodes, err := client.ListEpisodes(ctx, page.Items[0].ID, sdk.EpisodeOptions{})
-	if err != nil {
-		log.Fatal(err)
-	}
-	pb, err := client.ResolvePlayback(ctx, episodes.Items[0].ID, sdk.PlaybackOptions{})
-	if pb == nil {
-		log.Fatal(err)
-	}
-	for _, s := range pb.Streams {
-		fmt.Println(s.Definition, s.URL)
-	}
-}
-```
-
-第一次请求时，SDK 注册一台匿名设备，并把设备档案保存到 `anonymous.json`。以后的请求都使用这台匿名设备。
-
-<details>
-<summary>其他语言的写法</summary>
-
-| 语言 | 创建客户端并搜索 |
-|---|---|
-| Node.js | `const client = await createClient();`<br>`const page = await client.search('全球死考');` |
-| Kotlin | `val client = OpenhongguoClient.create(context)`<br>`val page = client.search("全球死考")` |
-| Swift | `let client = try OpenhongguoClient.create()`<br>`let page = try await client.search("全球死考")` |
-| React Native | `const client = await createClient();`<br>`const page = await client.search('全球死考');` |
-| Dart | `final client = await OpenhongguoClient.create();`<br>`final page = await client.search('全球死考');` |
-
-</details>
-
-## 客户端选项
-
-`adapters.NewClient` 用默认的实现创建客户端。`sdk.Options` 的字段都是可选的。
-
-```go
-client, err := adapters.NewClient("anonymous.json", sdk.Options{
-	RetryAttempts: 5,
-	Logger:        log.Default(),
-})
-```
-
-| 字段 | 作用 | 默认值 |
-|---|---|---|
-| `Transport` | 发送 HTTP 请求 | `httptransport.New()` |
-| `ProfileStore` | 保存设备档案 | `filestore.New(profilePath)` |
-| `Device` | 新匿名设备的机型。空字段使用默认值 | 小米 14 |
-| `RetryAttempts` | 可重试的失败的最多尝试次数 | 1，即不重试（其他语言的 SDK 默认是 3） |
-| `DeviceResets` | 设备被拒或播放返回空结果时，一次调用最多更换几台匿名设备。`sdk.Int(0)` 表示关闭，见[自动更换设备](#自动更换设备) | 2 |
-| `Logger` | 接收诊断日志 | 不记录 |
-| `APIOrigin`、`RegisterOrigin`、`DistributionOrigin` | 接口地址 | 与 App 相同 |
-
-如果不用 `adapters`，直接调用 `sdk.NewClient`。这时 `Transport` 和 `ProfileStore` 是必填的。
-
-## 分页
-
-带游标的列表返回 `sdk.Page`：`Items` 是本页的条目，`Cursor` 是下一页的游标，`HasMore` 表示是否还有下一页。
-
-如果要遍历所有页，使用 `DiscoverPager` 或 `SearchPager`。服务端会在不同的页中返回同一部短剧，Pager 删除重复的短剧。
-
-```go
-pager := client.SearchPager("末世", sdk.SearchOptions{})
-for {
-	items, more, err := pager.Next(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, s := range items {
-		fmt.Println(s.ID, s.Title)
-	}
-	if !more {
-		break
-	}
-}
-```
-
-## 错误处理
-
-所有错误都可以用 `errors.Is` 与 `sdk` 包的哨兵错误比较。
-
-```go
-_, err := client.GetSeries(ctx, seriesID)
-switch {
-case errors.Is(err, sdk.ErrContentUnavailable):
-	fmt.Println("这部短剧已下架")
-case errors.Is(err, sdk.ErrRateLimited):
-	time.Sleep(sdk.RetryAfter(err, 10*time.Second))
-case err != nil:
-	log.Fatal(err)
-}
-```
-
-其他语言的异常有同样的错误码（`code`）、是否可重试（`retryable`）和建议的等待时间（`retryAfterMs`）。
-
-<!-- gen:errors-go -->
-<!-- 由 go run ./bindings/docgen 生成，请修改 sdk 的 Go 注释，不要手工修改。 -->
-
-| Go | 错误码 | 含义 | 可重试 |
-|---|---|---|---|
-| `ErrInvalidOptions` | `INVALID_OPTIONS` | 客户端的设置或调用参数无效 | 否 |
-| `ErrProfileNotFound` | `PROFILE_NOT_FOUND` | 还没有保存过设备档案 | 否 |
-| `ErrSignerUnavailable` | `SIGNER_UNAVAILABLE` | 请求需要签名，而客户端没有可用的签名器 | 否 |
-| `ErrAuthenticationRequired` | `AUTHENTICATION_REQUIRED` | 内容需要登录才能访问，匿名客户端无法继续 | 否 |
-| `ErrNotProtected` | `NOT_PROTECTED` | 为未加密的播放模型请求了内容密钥 | 否 |
-| `ErrDRMProtected` | `DRM_PROTECTED` | 分集是加密的，需要内容密钥才能解密 | 否 |
-| `ErrAnonymousLimited` | `ANONYMOUS_LIMITED` | 服务端给匿名设备返回了空结果 | 否 |
-| `ErrRateLimited` | `RATE_LIMITED` | 请求太频繁，被服务端限流 | 是 |
-| `ErrTransport` | `TRANSPORT` | 网络请求失败 | 是 |
-| `ErrSignatureRejected` | `SIGNATURE_REJECTED` | 服务端拒绝了请求的签名 | 否 |
-| `ErrContentUnavailable` | `CONTENT_UNAVAILABLE` | 内容已下架、不存在，或当前调用方无权访问 | 否 |
-| `ErrParamInvalid` | `PARAM_INVALID` | 服务端认为请求参数无效 | 否 |
-| `ErrChallengeRequired` | `CHALLENGE_REQUIRED` | 服务端要求验证码或其他验证，匿名客户端无法继续 | 否 |
-| `ErrDeviceRejected` | `DEVICE_REJECTED` | 匿名设备被拒绝，需要重置设备后重新注册 | 否 |
-| `ErrEndOfList` | `END_OF_LIST` | 列表已经没有更多内容 | 否 |
-| `ErrAlbumUnavailable` | `ALBUM_UNAVAILABLE` | 匿名读取不到这个合集，或者这部短剧没有其他季 | 否 |
-<!-- /gen:errors-go -->
-
-## 重试与超时
-
-| 机制 | 说明 |
-|---|---|
-| 自动重试 | 限流、网络失败和服务端 5xx 错误可以重试。`RetryAttempts` 设置每个请求的最多尝试次数，SDK 在两次尝试之间等待 |
-| 等待上限 | 如果服务端要求等待超过 10 秒，SDK 不等待，直接返回 `ErrRateLimited`。错误信息包含需要等待的时间 |
-| 手动重试 | `sdk.Retryable(err)` 判断重试能否成功，`sdk.RetryAfter(err, fallback)` 返回建议的等待时间 |
-| 超时 | 用 `context.WithTimeout` 限制一次调用的总时间。`httptransport` 对每个请求另有 30 秒的超时 |
-
-```go
-ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-defer cancel()
-page, err := client.Search(ctx, "全球死考", sdk.SearchOptions{})
-```
-
-## 加密分集
-
-如果分集是加密的，`ResolvePlayback` 返回播放模型和 `ErrDRMProtected`。把播放模型传给 `sdk.ContentKey`，取得内容密钥。
-
-```go
-pb, err := client.ResolvePlayback(ctx, episodeID, sdk.PlaybackOptions{})
-if errors.Is(err, sdk.ErrDRMProtected) {
-	key, err := sdk.ContentKey(pb) // 把 key.Hex 传给 ffmpeg 的 -decryption_key
-	...
-}
-```
-
-| 项目 | 说明 |
-|---|---|
-| 加密方式 | cenc-aes-ctr |
-| 适用范围 | 一个分集的所有清晰度使用同一个内容密钥 |
-| 计算方式 | 只在本地计算。不发送请求，不需要 ffmpeg |
-
-## 匿名设备
-
-SDK 第一次请求时注册匿名设备，然后把设备档案交给 `ProfileStore` 保存。
-
-| 操作 | 方法 |
-|---|---|
-| 保存到文件 | `filestore.New(path)`，或 `adapters.NewClient(path, opts)` |
-| 只保存在内存 | `memstore.New()`。进程退出后丢失 |
-| 自定义存储 | 实现 `sdk.ProfileStore` 的 `Load`、`Save` 和 `Reset` |
-| 更换匿名设备 | 调用 `client.ResetDevice(ctx)` |
-| 更换机型 | 设置 `Options.Device`，然后调用 `ResetDevice`。机型只对新注册的匿名设备有效 |
-
-### 自动更换设备
-
-从 2026-10-29 起，服务端基本只给每台匿名设备返回一次播放模型。之后同一台设备的 `ResolvePlayback` 只得到空结果，返回 `ErrAnonymousLimited`。新设备的第一次请求也不一定成功。
-
-SDK 默认自动处理两种情况：
-
-- 任何接口返回 `ErrDeviceRejected`，即服务端拒绝了当前的匿名设备。
-- `ResolvePlayback` 返回 `ErrAnonymousLimited`。
-
-遇到这两种情况，SDK 丢弃当前设备，注册一台新设备，然后重新执行这次调用。`Options.DeviceResets` 设置一次调用最多更换几台设备，默认 2 台，0 表示关闭。它是 `*int`，不填表示默认值；设置时用 `sdk.Int(n)`，Go 1.26 起也可以写 `new(n)`。其他语言的 SDK 用 `deviceResets` 选项，含义相同。
-
-```go
-client, err := adapters.NewClient("anonymous.json", sdk.Options{
-	DeviceResets: sdk.Int(0), // 关闭自动更换，自己调用 ResetDevice
-})
-```
-
-几点说明：
-
-- **只有播放接口会因为空结果更换设备。** `ErrAnonymousLimited` 区分不了“被限制”和“结果本来为空”：任何接口返回空的响应体都报这个错误，`Discover`、`Search` 和 `ListEpisodes` 在列表为空时也报这个错误。目前观察到的限制只出现在播放接口，所以其他接口返回空结果时不更换设备，直接返回错误。
-- **并发调用只注册一台新设备。** 多个调用同时因为同一台设备失败时，只有第一个调用注册新设备，其他调用直接用这台新设备重试。
-- **更换设备会覆盖 `ProfileStore` 里的设备档案**，并通过 `Logger` 记一行日志。
-- 更换的次数用完后，SDK 返回最后一次的错误。
-
-## 自定义 HTTP
-
-实现 `sdk.Transport`，可以使用代理、记录请求或在测试中模拟服务端。
-
-```go
-type Transport interface {
-	Do(ctx context.Context, req *sdk.Request) (*sdk.Response, error)
-}
-```
-
-> **注意**：
->
-> - 只在没有收到响应时返回错误。HTTP 错误状态码要作为 `Response` 正常返回，SDK 自己判断。
-> - `Response.Body` 必须是原始字节，不要解压。SDK 根据 `Content-Encoding` 自己解压。
-> - 请求 URL 的查询参数包含设备 ID。记录日志前先脱敏。
-
-`httptransport.New()` 是默认实现。`SetLogger` 把每个请求的方法、脱敏后的 URL 和状态码写入日志。
-
-## 接口
-
-各语言的方法一一对应，参数的顺序相同。Go 的方法名以大写字母开头，其他语言以小写字母开头。返回值的字段见[类型参考](docs/types.md)。
-
-<!-- gen:methods-go -->
-<!-- 由 go run ./bindings/docgen 生成，请修改 sdk 的 Go 注释，不要手工修改。 -->
-
-### 发现与搜索
-
-| Go | 其他语言 | 作用 |
-|---|---|---|
-| `Discover` | `discover(options)` | 加载书城的一个频道，默认是“推荐” |
-| `DiscoverPager` | `discoverAll(options)` | 逐页遍历书城的一个频道，并去掉跨页重复的短剧 |
-| `Search` | `search(query, options)` | 搜索短剧，可以按真人剧、漫剧等筛选 |
-| `SearchPager` | `searchAll(query, options)` | 逐页遍历搜索结果，并去掉跨页重复的短剧 |
-| `Suggest` | `suggest(prefix)` | 返回某个前缀的搜索联想词 |
-| `HotSearch` | `hotSearch()` | 加载搜索页的“猜你想搜”和各个热搜榜 |
-| `SearchCues` | `searchCues()` | 加载搜索框里轮播的提示词 |
-| `NewReleases` | `newReleases(query)` | 加载上新日历的一页 |
-
-### 短剧与分集
-
-| Go | 其他语言 | 作用 |
-|---|---|---|
-| `GetSeries` | `getSeries(seriesId)` | 加载一部短剧的详情 |
-| `GetSeriesBatch` | `getSeriesBatch(seriesIds)` | 加载多部短剧及其分集，按请求顺序返回 |
-| `ListEpisodes` | `listEpisodes(seriesId, options)` | 加载一部短剧的分集列表 |
-| `Seasons` | `seasons(seriesId)` | 列出多季短剧的全部季 |
-| `SeriesRecommend` | `seriesRecommend(seriesId)` | 加载一部短剧的相关推荐 |
-| `GetAlbum` | `getAlbum(albumId)` | 加载一个合集（多季合集）及其各季 |
-
-### 榜单与分类
-
-| Go | 其他语言 | 作用 |
-|---|---|---|
-| `ShortRank` | `shortRank(query)` | 加载短剧排行榜的一页，包括演员榜 |
-| `ShortFilterPanel` | `shortFilterPanel(genre)` | 加载短剧筛选面板的各个选择行 |
-| `ShortFilter` | `shortFilter(query)` | 按条件筛选短剧，一次一页 |
-| `RankRows` | `rankRows(cellId, offset)` | 加载书城榜单的一页（经典频道的榜单入口） |
-| `RankGroups` | `rankGroups()` | 列出书城榜单的类型（经典频道的各个榜单） |
-| `Ranking` | `ranking(activityId, rankListId)` | 加载一个活动榜单 |
-| `Categories` | `categories(categoryId)` | 加载书籍分类的标签页：全部、男生、女生和默认标签页 |
-| `CategoryLanding` | `categoryLanding(categoryId, options)` | 加载书籍分类下列表的一页，以及它的筛选面板 |
-
-### 演员
-
-| Go | 其他语言 | 作用 |
-|---|---|---|
-| `Person` | `person(userId)` | 加载一位演员或一个角色的主页 |
-| `PersonWorks` | `personWorks(userId, cursor)` | 加载一位演员参演的短剧，一次一页（主页上的作品 › 剧作） |
-
-### 播放与设备
-
-| Go | 其他语言 | 作用 |
-|---|---|---|
-| `ResolvePlayback` | `resolvePlayback(episodeId)` | 加载一集的播放模型：各清晰度的地址、编码和码率 |
-| `ContentKey` | 并入 `resolvePlayback` 的结果 | 从播放模型算出加密分集的内容密钥 |
-| `ResetDevice` | `resetDevice()` | 丢弃当前匿名设备，并注册一台新设备 |
-<!-- /gen:methods-go -->
-
-## 命令行演示
-
-openhongguo-cli 是用 SDK 写的命令行工具，命令名是 `ohg`。它演示了 SDK 的典型用法。
-
-| 安装方式 | 说明 |
-|---|---|
-| 下载二进制 | 从 [GitHub Releases](https://github.com/beilunyang/openhongguo/releases) 下载对应平台的 `openhongguo-cli_*` 压缩包，有 macOS、Linux 和 Windows 的 amd64 与 arm64 版本 |
-| `go install` | `go install github.com/beilunyang/openhongguo/cmd/ohg@latest` |
-| 从源码构建 | `go build -o bin/ohg ./cmd/ohg` |
-
-macOS 会拦截从浏览器下载的未签名程序。解压后执行一次 `xattr -d com.apple.quarantine ohg`，再运行。
-
-下载和解密分集需要 `ffmpeg`，播放需要 `mpv`、`ffplay` 或 VLC 等播放器。
-
-```sh
-ohg search 全球死考
-ohg play 全球死考第一季
-```
-
-播放需要 `mpv`、`ffplay` 或 `vlc`，下载需要 `ffmpeg`。完整用法见 [docs/cli.md](docs/cli.md)。
-
-## 版本
-
-SDK 还没有发布 1.0 版本。在 1.0 之前，次版本号可能包含不兼容的变更。
-
-服务端的接口没有公开文档，随时可能改版。每日的[接口契约检查](docs/development.md#接口契约检查)用于尽早发现改版。
-
-## 贡献
-
-根目录的 `Makefile` 是构建和测试的入口。
-
-| 命令 | 作用 |
-|---|---|
-| `make test` | 运行不需要移动端工具链的所有测试。测试不访问网络 |
-| `make test-mobile` | 运行 Android 和 iOS 的测试 |
-| `make gen` | 修改 SDK 的类型或注释后，重新生成各语言的类型和文档 |
-| `make build` | 构建 CLI、Node.js 包和所有移动端包 |
-
-> **注意**：README 中的方法表和错误表由 `make gen` 生成。不要手工修改，修改 `sdk` 的 Go 注释。
-
-## 术语
-
-| 术语 | 含义 |
-|---|---|
-| 短剧 | 一部剧，有一个短剧 ID。电影也按短剧处理 |
-| 分集 | 短剧中的一集，有一个分集 ID。序数写作“第 1 集” |
-| 季、合集 | 多季短剧的每一季是一部短剧；各季组成一个合集 |
-| 匿名设备 | SDK 注册的虚拟手机。SDK 用它发送请求 |
-| 设备档案 | 保存匿名设备信息的 JSON 文件 |
-| 播放模型 | 一个分集的播放信息：各清晰度的地址、编码和码率 |
-| 内容密钥 | 解密加密分集的 AES 密钥 |
-
-## 免责声明
-
-### 1. 项目目的与性质
-
-本项目（以下简称“本项目”）是作为一个技术研究与学习工具而创建的，旨在探索和学习移动应用接口协议的分析与调用技术。
-
-本项目专注于短剧平台公开内容接口的技术研究，旨在提供给学习者和研究者作为技术交流之用。
-
-### 2. 法律合规性声明
-
-本项目开发者（以下简称“开发者”）郑重提醒用户在下载、安装和使用本项目时，严格遵守中华人民共和国相关法律法规，包括但不限于《中华人民共和国网络安全法》、《中华人民共和国反间谍法》等所有适用的国家法律和政策。
-
-用户应自行承担一切因使用本项目而可能引起的法律责任。
-
-### 3. 使用目的限制
-
-本项目严禁用于任何非法目的或非学习、非研究的商业行为。
-
-本项目不得用于任何形式的非法侵入他人计算机系统，不得用于任何侵犯他人知识产权或其他合法权益的行为。
-
-用户应保证其使用本项目的目的纯属个人学习和技术研究，不得用于任何形式的非法活动。
-
-### 4. 免责声明
-
-开发者已尽最大努力确保本项目的正当性及安全性，但不对用户使用本项目可能引起的任何形式的直接或间接损失承担责任，包括但不限于由于使用本项目而导致的任何数据丢失、设备损坏、法律诉讼等。
-
-### 5. 内容版权声明
-
-通过本项目访问的短剧、图片、文字等内容，其著作权及其他权利归原权利人所有。
-
-用户不得复制、传播、公开展示或以其他方式使用这些内容，侵犯权利人的合法权益。
-
-本项目提供的下载和解密功能仅用于个人学习和技术研究。用户应在研究完成后及时删除相关内容。
-
-### 6. 知识产权声明
-
-本项目的知识产权归开发者所有。本项目受到著作权法和国际著作权条约以及其他知识产权法律和条约的保护。
-
-用户在遵守本声明及相关法律法规的前提下，可以下载和使用本项目。
-
-### 7. 最终解释权
-
-关于本项目的最终解释权归开发者所有。开发者保留随时更改或更新本免责声明的权利，恕不另行通知。
-
-## 交流群
-
-<table>
-  <tr>
-    <td>
-      <img src="https://pic.otaku.ren/20250309/AQADAcQxGxQjaVZ-.jpg" width="240" />
-    </td>
-    <td>
-      <img src="docs/images/wechat-group.jpg" width="240" />
-    </td>
-    <td>
-      <img src="https://pic.otaku.ren/20250309/AQADCMQxGxQjaVZ-.jpg" width="240" />
-    </td>
-  </tr>
-  <tr>
-    <td>
-      关注公众号，获取更多项目动态，以及 AI、区块链和独立开发资讯。
-    </td>
-    <td>
-      扫码加入微信交流群。二维码每 7 天失效一次，失效时请添加右侧微信。
-    </td>
-    <td>
-      添加微信，备注「openhongguo」，拉你进微信交流群。
-    </td>
-  </tr>
-</table>
-
-也可以在社交平台上找到我：
-
-- X (Twitter)：[@0xdinglv](https://x.com/0xdinglv)
-- 小红书：[主页](https://xhslink.com/m/19FI1djnItu)
-- Telegram：[@beilunyang](https://t.me/beilunyang)
-
-## 友链
-
-感谢 [LINUXDO](https://linux.do/) 社区提供的帮助与支持。
-
-## 许可证
-
-本项目使用 Apache License 2.0 许可证。全文见 [LICENSE](LICENSE)。Copyright 2026 beilunyang。
+短剧、海报等内容的权利归各自权利人所有。

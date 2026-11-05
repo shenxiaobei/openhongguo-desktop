@@ -16,7 +16,7 @@ type group struct {
 // groups 决定方法在文档里的分节和顺序。新增方法时要加进这里，否则测试失败。
 var groups = []group{
 	{"发现与搜索", []string{"Discover", "DiscoverPager", "Search", "SearchPager", "Suggest", "HotSearch", "SearchCues", "NewReleases"}},
-	{"短剧与分集", []string{"GetSeries", "GetSeriesBatch", "ListEpisodes", "Seasons", "SeriesRecommend", "GetAlbum"}},
+	{"短剧与分集", []string{"GetSeries", "GetSeriesBatch", "ListEpisodes", "Seasons", "SeriesSeasons", "SeriesRecommend", "GetAlbum"}},
 	{"榜单与分类", []string{"ShortRank", "ShortFilterPanel", "ShortFilter", "RankRows", "RankGroups", "Ranking", "Categories", "CategoryLanding"}},
 	{"演员", []string{"Person", "PersonWorks"}},
 	{"播放与设备", []string{"ResolvePlayback", "ContentKey", "ResetDevice"}},
@@ -27,11 +27,13 @@ var renamed = map[string]string{
 	"DiscoverPager": "discoverAll",
 	"SearchPager":   "searchAll",
 	"ContentKey":    "",
+	"SeriesSeasons": "",
 }
 
 // otherNote 说明其他语言里没有的方法在哪里。
 var otherNote = map[string]string{
-	"ContentKey": "并入 `resolvePlayback` 的结果",
+	"ContentKey":    "并入 `resolvePlayback` 的结果",
+	"SeriesSeasons": "仅 Go 与原生桌面桥接，严格读取官方季列表",
 }
 
 // methodTables 生成分节的方法表。goNames 为真时同时列出 Go 和其他语言的

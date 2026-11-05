@@ -17,3 +17,25 @@ docs/rea/
 
 # 发布产物：上传到 GitHub Release 的文件
 /dist/
+
+# 原生应用的运行组件与编译输出；来源和校验值见原生桌面版说明。
+/native/runtime/**/*.dll
+/native/runtime/**/*.a
+/native/runtime/*.7z
+/native/runtime/*.zip
+/native/Hongguo.Desktop/bin/
+/native/Hongguo.Desktop/obj/
+/native/Hongguo.Desktop/Resources/*.exe
+/native/verification/**/bin/
+/native/verification/**/obj/
+/native/verification/**/*.mp4
+/native/verification/**/*.m4a
+/native/verification/**/output/
+/native/verification/**/results/
+/native/verification/**/state/
+
+# 本地浏览、调试与发布目录，运行数据不进入源码仓库。
+/.playwright-cli/
+/output/
+/Releases/
+*.log

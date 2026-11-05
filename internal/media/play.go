@@ -175,7 +175,8 @@ func (l *Launcher) runPlayer(ctx context.Context, name, playerPath string, args 
 	cmd.Stderr = watch
 	runErr := cmd.Run()
 	if ctx.Err() != nil {
-		return Result{}, ctx.Err()
+		// 桌面窗口停止或切集时，保留播放器最后报告的位置供续播使用。
+		return watch.result(req), ctx.Err()
 	}
 	res := watch.result(req)
 	if name == "mpv" {

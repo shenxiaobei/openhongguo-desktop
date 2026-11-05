@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>红果 · 桌面版</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <a class="brand" href="#discover" aria-label="红果桌面版首页">
+        <span class="brand-symbol" aria-hidden="true">果</span>
+        <span><strong>红果</strong><small>DESKTOP</small></span>
+      </a>
+      <p class="nav-label">我的片场</p>
+      <nav class="nav-items">
+        <button class="nav-item active" data-view="discover" aria-current="page"><span aria-hidden="true">◈</span>发现好剧</button>
+        <button class="nav-item" data-view="history"><span aria-hidden="true">◷</span>观看记录</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-note"><span class="note-mark" aria-hidden="true">▶</span><strong>小屏故事，大屏看</strong><p>找到喜欢的故事，<br>交给本机播放器。</p></div>
+        <button class="nav-item" data-view="settings"><span aria-hidden="true">⚙</span>设置与诊断</button>
+        <button class="nav-item quit-button" id="quit-button"><span aria-hidden="true">↪</span>退出应用</button>
+        <p class="sidebar-version">openhongguo <span id="sidebar-version">桌面版</span></p>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="topbar-title"><span class="eyebrow">你的故事时光</span><h1 id="page-title">发现好剧</h1></div>
+        <form class="search-form" id="search-form" role="search">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="search-input" type="search" placeholder="搜一部想看的短剧" aria-label="搜索短剧" autocomplete="off" maxlength="100">
+          <button class="search-submit" type="submit">搜索</button>
+        </form>
+        <div class="connection" id="connection" role="status"><span class="status-dot"></span><span id="connection-text">正在连接</span></div>
+      </header>
+
+      <div class="content-area">
+        <div class="notice notice-error" id="connection-notice" role="alert" hidden>
+          <span id="connection-notice-text"></span><button class="text-button" id="reconnect-button">重新连接</button>
+        </div>
+
+        <section id="catalog-view" aria-label="剧集目录">
+          <div class="hero" id="hero">
+            <div class="hero-copy"><span class="hero-label">把故事带到桌面</span><h2>好故事，<br>随时开场。</h2><p>浏览、搜索、选集。<br>下一段精彩，由你按下播放。</p></div>
+            <div class="hero-art" aria-hidden="true"><div class="film-card film-card-back"></div><div class="film-card film-card-front"><span class="film-grain"></span><span class="film-caption">STORIES<br>WORTH<br>YOUR TIME.</span><span class="film-play">▶</span></div><div class="hero-circle"></div><span class="hero-vertical">每一个故事，都值得被看见</span></div>
+          </div>
+          <div class="catalog-toolbar">
+            <div class="channel-tabs" id="channel-tabs" role="group" aria-label="选择频道">
+              <button class="channel-tab active" data-channel="推荐" aria-pressed="true">推荐</button>
+              <button class="channel-tab" data-channel="真人剧" aria-pressed="false">真人剧</button>
+              <button class="channel-tab" data-channel="漫剧" aria-pressed="false">漫剧</button>
+              <button class="channel-tab" data-channel="电影" aria-pressed="false">电影</button>
+            </div>
+            <button class="quiet-button" id="refresh-button"><span aria-hidden="true">↻</span> 刷新</button>
+          </div>
+          <div class="section-heading"><h2 id="catalog-title">为你发现</h2><span id="result-count" class="muted"></span></div>
+          <div class="notice notice-error" id="catalog-error" role="alert" hidden><div><strong>这次没有加载成功</strong><p id="catalog-error-text"></p></div><button class="secondary-button" id="catalog-retry">重试</button></div>
+          <div class="poster-grid" id="poster-grid" aria-live="polite" aria-busy="true"></div>
+          <div class="empty-state" id="catalog-empty" hidden><span class="empty-icon" aria-hidden="true">⌕</span><h3>还没有找到相关故事</h3><p>换一个剧名或关键词，再找找看。</p></div>
+          <div class="pagination"><button class="secondary-button" id="load-more" hidden>加载更多</button><span class="muted" id="catalog-end" hidden>这一页的故事都在这里了</span></div>
+        </section>
+
+        <section id="history-view" hidden>
+          <div class="section-heading"><div><span class="eyebrow">接着上次的故事</span><h2>最近观看</h2></div><button class="quiet-button" id="history-refresh">↻ 刷新记录</button></div>
+          <div class="notice notice-error" id="history-error" role="alert" hidden><span id="history-error-text"></span><button class="text-button" id="history-retry">重试</button></div>
+          <div class="history-list" id="history-list" aria-live="polite"></div>
+          <div class="empty-state" id="history-empty" hidden><span class="empty-icon" aria-hidden="true">◷</span><h3>你的故事，还没开场</h3><p>播放过的剧集会出现在这里，方便下次继续。</p><button class="primary-button" id="history-discover">去发现好剧</button></div>
+        </section>
+
+        <section id="settings-view" hidden>
+          <div class="section-heading"><div><span class="eyebrow">让播放准备就绪</span><h2>设置与诊断</h2></div><button class="quiet-button" id="settings-refresh">↻ 刷新诊断</button></div>
+          <div class="settings-card"><div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">▶</span><div><h3>本机播放器</h3><p>选集播放时，会打开本机播放器窗口。</p></div></div><div id="player-diagnostic" class="player-diagnostic"></div><div class="tool-list" id="tool-list"></div><p class="settings-hint">支持 mpv、ffplay、VLC。播放器在启动时检测，安装后请先退出应用，再重新打开桌面版。</p></div>
+          <div class="settings-card"><h3>本地数据</h3><p class="settings-hint">观看记录和设备信息保存在这台电脑。排查问题时，可以查看日志文件。</p><dl class="path-list"><dt>数据目录</dt><dd id="config-path">正在读取…</dd><dt>日志文件</dt><dd id="log-path">正在读取…</dd><dt>应用版本</dt><dd id="app-version">正在读取…</dd></dl></div>
+        </section>
+      </div>
+
+      <footer class="playback-bar" id="playback-bar">
+        <span class="playback-symbol" aria-hidden="true">▶</span><div class="playback-copy"><strong id="playback-title">准备好，进入一个新故事</strong><span id="playback-description">选择剧集后，播放将打开本机播放器</span></div><span class="playback-badge" id="playback-badge">待播放</span><button class="secondary-button" id="stop-button" disabled>停止播放</button>
+      </footer>
+    </main>
+  </div>
+
+  <dialog id="series-dialog" class="series-dialog" aria-labelledby="series-title">
+    <button class="dialog-close" id="close-dialog" aria-label="关闭剧集详情">×</button>
+    <div class="detail-loading" id="detail-loading"><span class="spinner"></span><p>正在展开这个故事…</p></div>
+    <div class="notice notice-error detail-error" id="detail-error" role="alert" hidden><div><strong>剧集详情没有加载成功</strong><p id="detail-error-text"></p></div><button class="secondary-button" id="detail-retry">重试</button></div>
+    <div id="detail-content" hidden>
+      <div class="detail-overview"><div class="detail-cover" id="detail-cover"></div><div class="detail-copy"><span class="eyebrow">故事详情</span><h2 id="series-title"></h2><p class="detail-meta" id="series-meta"></p><p class="detail-description" id="series-description"></p></div></div>
+      <div class="episode-heading"><h3>选择剧集</h3><span id="episode-count" class="muted"></span></div>
+      <div class="episode-grid" id="episode-grid" role="group" aria-label="选择播放分集"></div>
+      <div class="detail-play-area"><div class="play-selection"><strong id="selected-episode">请选择分集</strong><span id="detail-player-note">播放将打开本机播放器</span></div><label class="quality-control">画质<select id="quality-select"><option value="best">最佳画质</option><option value="720p">720P</option><option value="480p">480P</option></select></label><button class="primary-button" id="play-button" disabled><span aria-hidden="true">▶</span> 播放这一集</button></div>
+      <p class="detail-feedback" id="detail-feedback" role="status" hidden></p>
+    </div>
+  </dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

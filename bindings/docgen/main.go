@@ -1,8 +1,8 @@
 // Command docgen 根据 sdk 的 Go 源码和注释，生成各语言 SDK 共用的文档：
-// README 里的方法表和错误表，以及类型参考 docs/types.md。
+// SDK 参考及各绑定 README 里的方法表和错误表，以及类型参考 docs/types.md。
 //
 // 方法和错误的一句话说明取自 Go 注释的首句，方法名和错误码取自
-// bindings/internal/dispatch，类型取自 bindings/internal/schema。README 里
+// bindings/internal/dispatch，类型取自 bindings/internal/schema。文档里
 // 生成的部分夹在 <!-- gen:名字 --> 和 <!-- /gen:名字 --> 之间，其余部分
 // 手写，不受影响。
 //
@@ -22,9 +22,9 @@ import (
 	"github.com/beilunyang/openhongguo/bindings/internal/schema"
 )
 
-// regions 列出每个 README 里要生成的区块。
+// regions 列出每个文档里要生成的区块。
 var regions = map[string][]string{
-	"README.md":                  {"methods-go", "errors-go"},
+	"docs/sdk.md":                {"methods-go", "errors-go"},
 	"bindings/node/README.md":    {"methods", "errors"},
 	"bindings/mobile/README.md":  {"methods", "errors"},
 	"bindings/flutter/README.md": {"methods", "errors"},
