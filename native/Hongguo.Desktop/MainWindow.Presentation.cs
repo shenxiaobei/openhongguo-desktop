@@ -30,6 +30,7 @@ public partial class MainWindow
     private Brush? _controlsBorderBrush;
     private Brush? _timelineBackground;
     private Brush? _timeForeground;
+    private System.Windows.Media.Effects.Effect? _controlsEffect;
     private int _controlsRow;
     private int _controlsColumn;
     private readonly DispatcherTimer _fullscreenTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -52,6 +53,7 @@ public partial class MainWindow
         _controlsBorderBrush = PlayerControls.BorderBrush;
         _timelineBackground = SeekSlider.Background;
         _timeForeground = TimeText.Foreground;
+        _controlsEffect = PlayerControls.Effect;
         _controlsRow = Grid.GetRow(PlayerControls);
         _controlsColumn = Grid.GetColumn(PlayerControls);
         SourceInitialized += (_, _) => ApplyDarkTitleBar();
@@ -78,11 +80,13 @@ public partial class MainWindow
         VideoHost.UserActivity += (_, _) => RevealFullscreenControls();
         _fullscreenTimer.Tick += (_, _) => UpdateFullscreenControls();
         Activated += (_, _) => RevealFullscreenControls();
-        Deactivated += (_, _) =>
+        Deactivated += (_, _) => HideFullscreenControls();
+        StateChanged += (_, _) =>
         {
-            if (_fullscreenControls != null) _fullscreenControls.IsOpen = false;
-            SetFullscreenCursorHidden(false);
+            if (WindowState == WindowState.Minimized) HideFullscreenControls();
+            else RevealFullscreenControls();
         };
+        IsVisibleChanged += (_, _) => { if (!IsVisible) HideFullscreenControls(); };
         InitializeDiscoveryPresentation();
         InitializeRankingUpdates();
         EpisodeSidebar.IsVisibleChanged += (_, _) => ApplyResponsiveLayout();
@@ -267,14 +271,12 @@ public partial class MainWindow
         CinemaLayout.Children.Remove(PlayerControls);
         PlayerControls.Margin = new Thickness(0);
         PlayerControls.CornerRadius = new CornerRadius(0);
-        // 只让底板透出视频，按钮与文字保持不透明，浅色画面上仍能读清。
-        PlayerControls.Background = new LinearGradientBrush(
-            new GradientStopCollection
-            {
-                new GradientStop(Color.FromArgb(0, 7, 10, 16), 0),
-                new GradientStop(Color.FromArgb(56, 7, 10, 16), 0.45),
-                new GradientStop(Color.FromArgb(140, 7, 10, 16), 1)
-            }, new Point(0, 0), new Point(0, 1));
+        // 底板完全透明；只给控件轮廓加阴影，浅色视频上也能辨认文字。
+        PlayerControls.Background = Brushes.Transparent;
+        PlayerControls.Effect = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            Color = Colors.Black, BlurRadius = 4, ShadowDepth = 1, Opacity = 0.85
+        };
         PlayerControls.BorderBrush = Brushes.Transparent;
         SeekSlider.Background = new SolidColorBrush(Color.FromArgb(95, 221, 229, 242));
         TimeText.Foreground = Brushes.White;
@@ -318,6 +320,7 @@ public partial class MainWindow
         PlayerControls.CornerRadius = _controlsCorners;
         PlayerControls.Background = _controlsBackground;
         PlayerControls.BorderBrush = _controlsBorderBrush;
+        PlayerControls.Effect = _controlsEffect;
         SeekSlider.Background = _timelineBackground;
         TimeText.Foreground = _timeForeground;
         Grid.SetRow(PlayerControls, _controlsRow);
@@ -328,6 +331,12 @@ public partial class MainWindow
     private void RevealFullscreenControls()
     {
         if (!IsImmersivePlayback || _closing || _fullscreenControls == null) return;
+        // 鼠标经过后台窗口也会产生活动事件，禁止据此重开置顶浮层。
+        if (!IsActive || !IsVisible || WindowState == WindowState.Minimized)
+        {
+            HideFullscreenControls();
+            return;
+        }
         _lastControlActivity = DateTime.UtcNow;
         SetFullscreenCursorHidden(false);
         _fullscreenControls.IsOpen = true;
@@ -335,11 +344,25 @@ public partial class MainWindow
 
     private void UpdateFullscreenControls()
     {
-        if (!IsImmersivePlayback || _closing || _fullscreenControls == null || !IsActive) return;
+        if (!IsImmersivePlayback || _closing || _fullscreenControls == null) return;
+        if (!IsActive || !IsVisible || WindowState == WindowState.Minimized)
+        {
+            HideFullscreenControls();
+            return;
+        }
         if ((DateTime.UtcNow - _lastControlActivity).TotalSeconds < 3) return;
         if (PlayerControls.IsMouseOver || _seeking || SpeedCombo.IsDropDownOpen || QualityCombo.IsDropDownOpen || _playbackOptionsPopup?.IsOpen == true) return;
         _fullscreenControls.IsOpen = false;
         SetFullscreenCursorHidden(true);
+    }
+
+    private void HideFullscreenControls()
+    {
+        if (_fullscreenControls != null) _fullscreenControls.IsOpen = false;
+        SpeedCombo.IsDropDownOpen = false;
+        QualityCombo.IsDropDownOpen = false;
+        ClosePlaybackOptions();
+        SetFullscreenCursorHidden(false);
     }
 
     private void SetFullscreenCursorHidden(bool hidden)

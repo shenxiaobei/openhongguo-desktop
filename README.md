@@ -1,12 +1,14 @@
 # 红果原生桌面版
 
-**OpenHongguo Desktop · v0.3.7 · Windows 10 / 11 x64**
+**OpenHongguo Desktop · v0.3.8 · Windows 10 / 11 x64**
 
 一个使用 WPF 原生窗口、内嵌视频播放器的 Windows 短剧客户端。支持搜索找剧、题材筛选、排行榜、连续推荐、选集播放和观看记录。
 
 本项目基于并借鉴 [beilunyang/openhongguo](https://github.com/beilunyang/openhongguo) 二次开发，保留原作者版权与许可证；Windows 原生桌面功能在其 SDK 基础上扩展。
 
 下载完整分发包并解压，双击其中的 `红果原生桌面版.exe` 即可使用。.NET 桌面运行时、SDK 桥和视频组件已内置，使用时无需另装 Edge、mpv、ffplay 或 ffmpeg。
+
+当前 v0.3.8 修复了播放控制栏浮在其他应用上的问题：切换窗口或最小化时收起浮层，后台鼠标活动不再重新打开；沉浸控制栏移除灰色渐变底板。
 
 ## 功能
 
@@ -27,12 +29,12 @@
 
 ## 下载与运行
 
-在[本仓库 v0.3.7 Releases](https://github.com/shenxiaobei/openhongguo-desktop/releases/tag/v0.3.7) 页面选择 **Windows x64 完整分发包**，也可直接点击下表下载：
+在[本仓库 v0.3.8 Releases](https://github.com/shenxiaobei/openhongguo-desktop/releases/tag/v0.3.8) 页面选择 **Windows x64 完整分发包**，也可直接点击下表下载：
 
 | 文件 | 用途 |
 |---|---|
-| [OpenHongguo-Desktop-v0.3.7-windows-x64.zip](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.7/OpenHongguo-Desktop-v0.3.7-windows-x64.zip) | 使用者下载的完整分发包，包含 EXE、说明和许可证 |
-| [OpenHongguo-Desktop-v0.3.7-windows-x64.exe](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.7/OpenHongguo-Desktop-v0.3.7-windows-x64.exe) | 单独 EXE；建议下载完整包以保留说明和第三方许可证 |
+| [OpenHongguo-Desktop-v0.3.8-windows-x64.zip](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.8/OpenHongguo-Desktop-v0.3.8-windows-x64.zip) | 使用者下载的完整分发包，包含 EXE、说明和许可证 |
+| [OpenHongguo-Desktop-v0.3.8-windows-x64.exe](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.8/OpenHongguo-Desktop-v0.3.8-windows-x64.exe) | 单独 EXE；建议下载完整包以保留说明和第三方许可证 |
 | [openhongguo-native-runtime-v0.3.7-windows-x64.zip](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.7/openhongguo-native-runtime-v0.3.7-windows-x64.zip) | 开发者从源码构建时使用的原生运行库包 |
 
 1. 解压完整分发包，双击 `红果原生桌面版.exe`。
