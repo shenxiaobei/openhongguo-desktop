@@ -6,7 +6,7 @@
 
 本项目基于并借鉴 [beilunyang/openhongguo](https://github.com/beilunyang/openhongguo) 二次开发，保留原作者版权与许可证；Windows 原生桌面功能在其 SDK 基础上扩展。
 
-下载成品后双击 `红果原生桌面版.exe` 即可使用。.NET 桌面运行时、SDK 桥和视频组件已内置，使用时无需另装 Edge、mpv、ffplay 或 ffmpeg。
+下载完整分发包并解压，双击其中的 `红果原生桌面版.exe` 即可使用。.NET 桌面运行时、SDK 桥和视频组件已内置，使用时无需另装 Edge、mpv、ffplay 或 ffmpeg。
 
 ## 功能
 
@@ -27,19 +27,20 @@
 
 ## 下载与运行
 
-在[本仓库 Releases](https://github.com/shenxiaobei/openhongguo-desktop/releases) 页面选择 **Windows x64 完整分发包**。当前版本的文件约定如下：
+在[本仓库 v0.3.7 Releases](https://github.com/shenxiaobei/openhongguo-desktop/releases/tag/v0.3.7) 页面选择 **Windows x64 完整分发包**，也可直接点击下表下载：
 
 | 文件 | 用途 |
 |---|---|
-| `红果原生桌面版-v0.3.7-windows-x64.zip` | 使用者下载的完整分发包，包含 EXE、说明和许可证 |
-| `openhongguo-native-runtime-v0.3.7-windows-x64.zip` | 开发者从源码构建时使用的原生运行库包 |
+| [OpenHongguo-Desktop-v0.3.7-windows-x64.zip](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.7/OpenHongguo-Desktop-v0.3.7-windows-x64.zip) | 使用者下载的完整分发包，包含 EXE、说明和许可证 |
+| [OpenHongguo-Desktop-v0.3.7-windows-x64.exe](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.7/OpenHongguo-Desktop-v0.3.7-windows-x64.exe) | 单独 EXE；建议下载完整包以保留说明和第三方许可证 |
+| [openhongguo-native-runtime-v0.3.7-windows-x64.zip](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.7/openhongguo-native-runtime-v0.3.7-windows-x64.zip) | 开发者从源码构建时使用的原生运行库包 |
 
 1. 解压完整分发包，双击 `红果原生桌面版.exe`。
 2. 在「发现」「排行榜」或搜索结果中点击剧目，进入播放页。
 3. 通过选集、进度条、倍速和画质菜单调整观看；小窗口下部分设置位于「更多」。
 4. 退出时保存观看进度，下次从「观看记录」继续。
 
-请保留分发包中的第三方许可证和组件来源说明。当前本地交付的两个 ZIP 位于源码目录同级的 `Releases/`，发布仓库时将它们作为 Release 附件上传。
+请保留分发包中的第三方许可证和组件来源说明。GitHub 附件采用英文文件名，完整包内的程序名称保持为 `红果原生桌面版.exe`。
 
 首次启动会校验并释放内置运行组件，耗时可能比后续启动更长。成品以单 EXE 交付，运行时仍会创建组件、封面、配置和历史文件。
 
