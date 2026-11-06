@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -23,8 +24,12 @@ func TestRecordGetListAndClear(t *testing.T) {
 		}
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
-		t.Fatalf("mode = %v err = %v", info.Mode().Perm(), err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Windows 用访问控制列表管理权限；仅在 Unix 上检查 0600，其他平台继续验证完整读写流程。
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
+		t.Fatalf("mode = %v", info.Mode().Perm())
 	}
 	got, ok, err := NewStore(path).Get(ctx, "1")
 	if err != nil || !ok || got != older {

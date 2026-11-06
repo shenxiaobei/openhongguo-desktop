@@ -2,12 +2,32 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Hongguo.Desktop"
-        Title="红果 · 原生桌面版" Width="1380" Height="900"
+        Title="" AutomationProperties.Name="红果原生桌面版" Width="1380" Height="900"
         Background="{StaticResource WindowBrush}" Foreground="#F5F6FA"
         FontFamily="Microsoft YaHei UI" UseLayoutRounding="True" SnapsToDevicePixels="True"
         WindowStartupLocation="CenterScreen" PreviewKeyDown="Window_KeyDown"
         Loaded="Window_Loaded" Closing="Window_Closing">
     <Window.Resources>
+        <Style x:Key="PlayerMenuRow" TargetType="Button">
+            <Setter Property="Height" Value="36" /><Setter Property="Padding" Value="10,0" />
+            <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#ECEDF0" />
+            <Setter Property="BorderBrush" Value="Transparent" /><Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="RowSurface" CornerRadius="7" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                    <Grid><Border x:Name="RowHover" Background="White" Opacity="0" CornerRadius="6" /><ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Stretch" /></Grid>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="RowHover" Property="Opacity" Value="0.06" /></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="RowSurface" Property="BorderBrush" Value="#727C8B" /></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="RowSurface" Property="Opacity" Value="0.4" /></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="PlayerIconButton" TargetType="Button" BasedOn="{StaticResource PlayerMenuRow}">
+            <Setter Property="Width" Value="30" /><Setter Property="Height" Value="30" /><Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
         <Style x:Key="PosterButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#F5F6FA" />
             <Setter Property="Padding" Value="0" /><Setter Property="Cursor" Value="Hand" />
@@ -69,7 +89,7 @@
                 </StackPanel>
                 <StackPanel x:Name="NavigationFooter" Grid.Row="3" Margin="12,0,0,0">
                     <TextBlock Text="把这一刻，交给故事。" Style="{StaticResource NavigationLabel}" FontSize="10" Foreground="#647084" Margin="0,0,0,18" />
-                    <Button Style="{StaticResource GhostButton}" Click="About_Click" HorizontalAlignment="Left" Padding="0,5" Foreground="#7A8496" ToolTip="版本与应用信息" AutomationProperties.Name="应用信息"><StackPanel Orientation="Horizontal"><TextBlock x:Name="AboutCompactGlyph" Text="ⓘ" Visibility="Collapsed" FontSize="19" /><TextBlock Text="应用信息" Style="{StaticResource NavigationLabel}" FontSize="10" Foreground="#7A8496" /><TextBlock Text="0.3.7" Style="{StaticResource NavigationLabel}" FontSize="10" Foreground="#465064" Margin="12,0,0,0" /></StackPanel></Button>
+                    <Button Style="{StaticResource GhostButton}" Click="About_Click" HorizontalAlignment="Left" Padding="0,5" Foreground="#7A8496" ToolTip="版本与应用信息" AutomationProperties.Name="应用信息"><StackPanel Orientation="Horizontal"><TextBlock x:Name="AboutCompactGlyph" Text="ⓘ" Visibility="Collapsed" FontSize="19" /><TextBlock Text="应用信息" Style="{StaticResource NavigationLabel}" FontSize="10" Foreground="#7A8496" /><TextBlock Text="1.0" Style="{StaticResource NavigationLabel}" FontSize="10" Foreground="#465064" Margin="12,0,0,0" /></StackPanel></Button>
                 </StackPanel>
             </Grid>
             </ScrollViewer>
@@ -80,7 +100,7 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition x:Name="SearchColumn" Width="330" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center" Margin="0,0,20,0"><TextBlock x:Name="PageEyebrow" Text="为下一段故事，留一点时间" Foreground="#717D90" FontSize="10" TextTrimming="CharacterEllipsis" /><TextBlock x:Name="PageTitle" Text="发现好剧" FontSize="24" FontWeight="Bold" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" /></StackPanel>
-                    <Border Grid.Column="1" Background="#141820" BorderBrush="#292F3B" BorderThickness="1" CornerRadius="12" Height="44" Padding="6,0,12,0" VerticalAlignment="Center">
+                    <Border x:Name="SearchEntry" Grid.Column="1" Background="#141820" BorderBrush="#292F3B" BorderThickness="1" CornerRadius="12" Height="44" Padding="6,0,12,0" VerticalAlignment="Center">
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="80" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <ComboBox x:Name="SearchTabCombo" SelectedIndex="1" SelectionChanged="SearchTab_Changed" Margin="0,4,5,4" MinWidth="70" Background="Transparent" BorderThickness="0" AutomationProperties.Name="搜索分类"><ComboBoxItem Content="综合" Tag="综合" /><ComboBoxItem Content="剧集" Tag="剧集" /><ComboBoxItem Content="视频" Tag="视频" /></ComboBox>
@@ -91,6 +111,21 @@
                             </Grid>
                         </Grid>
                     </Border>
+                    <Popup x:Name="SearchSuggestionsPopup" PlacementTarget="{Binding ElementName=SearchEntry}" Placement="Bottom" VerticalOffset="7" AllowsTransparency="True" StaysOpen="False" Focusable="False">
+                        <Border Background="#171C25" BorderBrush="#343D4B" BorderThickness="1" CornerRadius="12" Padding="7">
+                            <StackPanel>
+                                <TextBlock Text="搜索联想" FontSize="10" Foreground="#8190A6" Margin="9,5,9,7" />
+                                <ListBox x:Name="SearchSuggestionsList" Background="Transparent" BorderThickness="0" Foreground="#F1F4FA" FontSize="12" Focusable="False" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" MaxHeight="264" AutomationProperties.Name="剧名搜索联想">
+                                    <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                                        <Setter Property="Focusable" Value="False" /><Setter Property="Padding" Value="10,10" /><Setter Property="Margin" Value="0,1" /><Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="SuggestionRow" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}"><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" Foreground="#E8EDF5" /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SuggestionRow" Property="Background" Value="#263040" /></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="SuggestionRow" Property="Background" Value="#45302A" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+                                    </Style></ListBox.ItemContainerStyle>
+                                </ListBox>
+                                <TextBlock x:Name="SearchSuggestionsStatus" Text="正在联想…" FontSize="11" Foreground="#9AA8BD" Margin="10,8" TextWrapping="Wrap" />
+                                <TextBlock Text="↑↓ 选择 · Enter 搜索 · Esc 收起" FontSize="9" Foreground="#718097" Margin="9,7,9,3" />
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                     <Button x:Name="SearchButton" Grid.Column="2" Style="{StaticResource AccentButton}" Margin="10,0,0,0" Height="44" Padding="18,0" VerticalAlignment="Center" Click="Search_Click" AutomationProperties.AutomationId="SearchButton" AutomationProperties.Name="搜索"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Path Data="M 14 8 A 6 6 0 1 1 2 8 A 6 6 0 1 1 14 8 M 12.5 12.5 L 18 18" Stroke="#21171B" StrokeThickness="1.8" Width="14" Height="14" Stretch="Uniform" Margin="0,0,7,0" /><TextBlock Text="搜索" FontSize="12" FontWeight="SemiBold" Foreground="#21171B" /></StackPanel></Button>
                 </Grid>
             </Border>
@@ -145,34 +180,41 @@
                     </Grid>
                     <Grid Grid.Row="1" x:Name="CinemaLayout">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition x:Name="EpisodeColumn" Width="312" /></Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition x:Name="PlaybackControlsRow" Height="Auto" /></Grid.RowDefinitions>
                         <Border x:Name="VideoBorder" Background="Black" Margin="24,0,0,0" BorderBrush="#20252F" BorderThickness="1,1,1,0" CornerRadius="12,12,0,0" ClipToBounds="True"><Grid>
                             <StackPanel x:Name="VideoPlaceholder" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="25"><Border Width="60" Height="60" CornerRadius="30" Background="#161B25" HorizontalAlignment="Center"><Path Data="M 0 0 L 0 20 L 17 10 Z" Stroke="#566078" StrokeThickness="1.4" Width="17" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="3,0,0,0" /></Border><TextBlock x:Name="VideoMessage" Text="故事即将开始…" HorizontalAlignment="Center" Foreground="#7B879A" FontSize="12" Margin="0,20,0,0" TextWrapping="Wrap" /></StackPanel>
                             <local:NativeVideoHost x:Name="VideoHost" Visibility="Hidden" />
                         </Grid></Border>
                         <!-- 控制区与视频 HWND 分开布局，保证窗口内始终可点击。 -->
-                        <Border Grid.Row="1" x:Name="PlayerControls" Background="#141820" Margin="24,0,0,24" Padding="18,7,18,14" BorderBrush="#262B35" BorderThickness="1,0,1,1" CornerRadius="0,0,12,12">
-                            <Grid><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                <Slider x:Name="SeekSlider" Style="{StaticResource SeekSlider}" Minimum="0" Maximum="1" Value="0" IsEnabled="False" IsMoveToPointEnabled="True" Height="22" Margin="0,0,0,4" PreviewMouseLeftButtonDown="Seek_Begin" PreviewMouseLeftButtonUp="Seek_End" ValueChanged="Seek_Changed" AutomationProperties.AutomationId="SeekSlider" AutomationProperties.Name="播放进度" />
-                                <Grid Grid.Row="1" x:Name="ControlGroups"><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <Border Grid.Row="1" x:Name="PlayerControls" Height="44" Background="#141820" Margin="24,0,0,12" Padding="10,0" BorderBrush="#262B35" BorderThickness="1,0,1,1" CornerRadius="0,0,12,12">
+                                <Grid x:Name="ControlGroups" VerticalAlignment="Center"><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <Slider x:Name="SeekSlider" Grid.Column="1" Style="{StaticResource SeekSlider}" Minimum="0" Maximum="1" Value="0" IsEnabled="False" IsMoveToPointEnabled="True" Height="20" Margin="12,0,16,0" VerticalAlignment="Center" PreviewMouseLeftButtonDown="Seek_Begin" PreviewMouseLeftButtonUp="Seek_End" ValueChanged="Seek_Changed" AutomationProperties.AutomationId="SeekSlider" AutomationProperties.Name="播放进度" />
                                     <StackPanel x:Name="TransportGroup" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Button x:Name="PreviousButton" Style="{StaticResource IconButton}" Width="32" Height="36" Click="Previous_Click" IsEnabled="False" Margin="0,0,6,0" ToolTip="上一集" AutomationProperties.Name="上一集"><Path Data="M 3 3 L 3 17 M 17 3 L 7 10 L 17 17 Z" Stroke="#CFD5E0" Fill="#CFD5E0" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></Button>
+                                        <Button x:Name="PreviousButton" Style="{StaticResource PlayerIconButton}" Click="Previous_Click" IsEnabled="False" Margin="0,0,4,0" ToolTip="上一集" AutomationProperties.Name="上一集"><Path Data="M 3 3 L 3 17 M 17 3 L 7 10 L 17 17 Z" Stroke="#CFD5E0" Fill="#CFD5E0" StrokeThickness="1.5" Width="13" Height="13" Stretch="Uniform" /></Button>
                                         <Button x:Name="PauseButton" Content="暂停" Style="{StaticResource PrimaryPlayButton}" Click="Pause_Click" IsEnabled="False" Margin="0,0,9,0" ToolTip="播放 / 暂停 · 空格" AutomationProperties.AutomationId="PauseButton" AutomationProperties.Name="播放或暂停" />
-                                        <Button x:Name="NextButton" Style="{StaticResource GhostButton}" Height="36" Click="Next_Click" IsEnabled="False" Margin="0,0,14,0" Padding="10,0" ToolTip="下一集" AutomationProperties.AutomationId="NextEpisodeButton" AutomationProperties.Name="下一集"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Path x:Name="NextEpisodeGlyph" Data="M 3 3 L 13 10 L 3 17 Z M 17 3 L 17 17" Stroke="#CFD5E0" Fill="#CFD5E0" StrokeThickness="1.5" Width="13" Height="13" Stretch="Uniform" Margin="0,0,7,0" /><TextBlock x:Name="NextEpisodeLabel" Text="下一集" FontSize="11" Foreground="#CFD5E0" /></StackPanel></Button>
+                                        <Button x:Name="NextButton" Style="{StaticResource PlayerIconButton}" Click="Next_Click" IsEnabled="False" Margin="0,0,8,0" ToolTip="下一集" AutomationProperties.AutomationId="NextEpisodeButton" AutomationProperties.Name="下一集"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Path x:Name="NextEpisodeGlyph" Data="M 3 3 L 13 10 L 3 17 Z M 17 3 L 17 17" Stroke="#CFD5E0" Fill="#CFD5E0" StrokeThickness="1.5" Width="13" Height="13" Stretch="Uniform" /><TextBlock x:Name="NextEpisodeLabel" Text="下一集" FontSize="11" Foreground="#CFD5E0" Visibility="Collapsed" /></StackPanel></Button>
                                         <TextBlock x:Name="TimeText" Text="00:00 / 00:00" FontFamily="Bahnschrift, Segoe UI" FontSize="11" Foreground="#7E8BA1" VerticalAlignment="Center" MinWidth="88" />
                                     </StackPanel>
-                                    <StackPanel x:Name="SettingsGroup" Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" VerticalAlignment="Center">
+                                    <StackPanel x:Name="SettingsGroup" Grid.Row="1" Grid.ColumnSpan="3" Visibility="Collapsed" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" VerticalAlignment="Center">
                                         <CheckBox x:Name="AutoNextCheck" Content="自动连播" IsChecked="True" VerticalAlignment="Center" Margin="0,0,14,0" FontSize="10" ToolTip="自动播放下一集；本季完结后接续同一合集的下一季" AutomationProperties.AutomationId="AutoNextCheck" />
+                                        <TextBlock Text="播放倍速" FontSize="10" Foreground="#8C99AD" Margin="0,0,0,6" />
                                         <ComboBox x:Name="SpeedCombo" SelectedIndex="2" SelectionChanged="Speed_Changed" Width="84" MinWidth="76" Height="34" Margin="0,0,8,0" ToolTip="播放倍速" AutomationProperties.Name="播放倍速" AutomationProperties.AutomationId="SpeedCombo"><ComboBoxItem Content="0.5 倍" Tag="0.5" /><ComboBoxItem Content="0.75 倍" Tag="0.75" /><ComboBoxItem Content="1.0 倍" Tag="1" /><ComboBoxItem Content="1.25 倍" Tag="1.25" /><ComboBoxItem Content="1.5 倍" Tag="1.5" /><ComboBoxItem Content="2.0 倍" Tag="2" /><ComboBoxItem Content="3.0 倍" Tag="3" /></ComboBox>
+                                        <TextBlock Text="画质" FontSize="10" Foreground="#8C99AD" Margin="0,0,0,6" />
                                         <ComboBox x:Name="QualityCombo" DisplayMemberPath="Label" SelectionChanged="Quality_Changed" IsEnabled="False" Width="142" MinWidth="110" Height="34" Margin="0,0,14,0" ToolTip="切换画质，保留观看进度" AutomationProperties.Name="画质" AutomationProperties.AutomationId="QualityCombo" />
+                                        <TextBlock Text="音量" FontSize="10" Foreground="#8C99AD" Margin="0,0,0,6" />
                                         <StackPanel x:Name="VolumeGroup" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0"><Path Data="M 2 7 L 6 7 L 11 3 L 11 17 L 6 13 L 2 13 Z M 14 6 C 17 8 17 12 14 14 M 17 3 C 22 7 22 13 17 17" Stroke="#8C99AD" StrokeThickness="1.5" Width="17" Height="16" Stretch="Uniform" Margin="0,0,8,0" /><Slider x:Name="VolumeSlider" Style="{StaticResource VolumeSlider}" Minimum="0" Maximum="100" Value="80" Width="62" Height="24" IsMoveToPointEnabled="True" VerticalAlignment="Center" ValueChanged="Volume_Changed" ToolTip="音量" AutomationProperties.Name="音量" /></StackPanel>
                                     </StackPanel>
                                     <StackPanel x:Name="QuickActionsGroup" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Button x:Name="PlaybackOptionsButton" Style="{StaticResource IconButton}" Content="⋯" Width="32" Height="32" FontSize="21" Visibility="Collapsed" Click="PlaybackOptions_Click" ToolTip="倍速、画质、音量与自动连播" AutomationProperties.Name="播放设置" />
-                                        <Button x:Name="FullscreenButton" Style="{StaticResource IconButton}" Width="34" Height="34" Click="Fullscreen_Click" ToolTip="窗口内全屏 · F11 屏幕全屏" AutomationProperties.Name="窗口内全屏"><Path x:Name="FullscreenIcon" Data="M 7 2 L 2 2 L 2 7 M 13 2 L 18 2 L 18 7 M 2 13 L 2 18 L 7 18 M 13 18 L 18 18 L 18 13" Stroke="#ABB6C8" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform" /></Button>
+                                        <StackPanel x:Name="ToolbarVolumeGroup" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                            <Path Data="M 2 7 L 6 7 L 11 3 L 11 17 L 6 13 L 2 13 Z M 14 6 C 17 8 17 12 14 14" Stroke="#8C99AD" StrokeThickness="1.5" Width="16" Height="16" Stretch="Uniform" Margin="0,0,8,0" />
+                                            <Slider x:Name="ToolbarVolumeSlider" Style="{StaticResource VolumeSlider}" Minimum="0" Maximum="100" Value="{Binding Value, ElementName=VolumeSlider, Mode=TwoWay}" Width="62" Height="24" IsMoveToPointEnabled="True" ToolTip="音量" AutomationProperties.Name="主栏音量" />
+                                        </StackPanel>
+                                        <Button x:Name="PlaybackOptionsButton" Style="{StaticResource PlayerIconButton}" Click="PlaybackOptions_Click" ToolTip="播放设置" AutomationProperties.Name="播放设置">
+                                            <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="#C8CDD5" HorizontalAlignment="Center" />
+                                        </Button>
+                                        <Button x:Name="FullscreenButton" Style="{StaticResource PlayerIconButton}" Click="Fullscreen_Click" ToolTip="窗口内全屏 · F11 屏幕全屏" AutomationProperties.Name="窗口内全屏"><Path x:Name="FullscreenIcon" Data="M 7 2 L 2 2 L 2 7 M 13 2 L 18 2 L 18 7 M 2 13 L 2 18 L 7 18 M 13 18 L 18 18 L 18 13" Stroke="#ABB6C8" StrokeThickness="1.6" Width="15" Height="15" Stretch="Uniform" /></Button>
                                     </StackPanel>
                                 </Grid>
-                            </Grid>
                         </Border>
                         <Border Grid.Column="1" Grid.RowSpan="2" x:Name="EpisodeSidebar" Background="#12161E" BorderBrush="#252B36" BorderThickness="1" CornerRadius="12" Margin="18,0,24,24" Padding="18">
                             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>

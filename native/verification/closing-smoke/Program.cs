@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Windows.Threading;
 using System.Xml.Linq;
@@ -71,7 +73,16 @@ internal static class Program
 
     private static async Task<object> CheckCloseAsync(string name, bool backend, bool failBackend, bool media, bool fullscreen = false, string popup = "", bool repeatClose = false)
     {
-        var window = new MainWindow { ShowInTaskbar = false, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -4000, Top = 20, Opacity = 0, Width = 640, Height = 420 };
+        var window = new MainWindow { Title = "本地关闭回归 · " + name, ShowInTaskbar = false, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -4000, Top = 20, Opacity = 0, Width = 640, Height = 420 };
+        if (popup != "")
+        {
+            // 菜单遵守真实前台约束；仅将夹具自己的窗口移入工作区并激活。
+            window.Left = 40;
+            window.Top = 40;
+            window.Opacity = 1;
+            window.ShowActivated = true;
+            window.ShowInTaskbar = true;
+        }
         Current = window;
         window.Loaded -= (RoutedEventHandler)Delegate.CreateDelegate(typeof(RoutedEventHandler), window, typeof(MainWindow).GetMethod("Window_Loaded", Private)!);
         InputMethod.SetIsInputMethodEnabled(window, false);
@@ -123,12 +134,24 @@ internal static class Program
             Invoke(window, "ToggleFullscreen");
         }
         Popup? openedPopup = null;
+        bool popupForegroundConfirmed = false;
         if (popup != "")
         {
             window.Width = 480;
             window.Height = 320;
             Invoke(window, "ShowScreen", Control<Grid>(window, "PlayerScreen"));
             window.UpdateLayout();
+            IntPtr handle = new WindowInteropHelper(window).Handle;
+            bool activated = window.Activate();
+            bool foregroundAccepted = SetForegroundWindow(handle);
+            var foregroundWait = Stopwatch.StartNew();
+            while (!(window.IsActive && GetAncestor(GetForegroundWindow(), 3) == handle))
+            {
+                if (foregroundWait.ElapsedMilliseconds > 30000)
+                    throw new TimeoutException($"弹层打开前未取得前台 activated={activated}, foregroundAccepted={foregroundAccepted}, isActive={window.IsActive}, expected={handle.ToInt64()}, actual={GetForegroundWindow().ToInt64()}, rootOwner={GetAncestor(GetForegroundWindow(), 3).ToInt64()}, closeIssued=false");
+                await Task.Delay(20);
+            }
+            popupForegroundConfirmed = true;
             string button = popup == "episode" ? "EpisodePickerButton" : "PlaybackOptionsButton";
             Control<Button>(window, button).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             string field = popup == "episode" ? "_episodePickerPopup" : "_playbackOptionsPopup";
@@ -178,7 +201,7 @@ internal static class Program
         bool childExited = !ProcessExists(ownedProcessId);
         Require(childExited, "关闭后测试桥接进程仍存活");
         Current = null;
-        return new { closed = true, elapsedMs = elapsed.Elapsed.TotalMilliseconds, closingEvents, dispatcherErrorCount = 0, playersDisposed, historySaved, childExited, popupClosed = openedPopup == null || !openedPopup.IsOpen };
+        return new { closed = true, elapsedMs = elapsed.Elapsed.TotalMilliseconds, closingEvents, dispatcherErrorCount = 0, playersDisposed, historySaved, childExited, popupClosed = openedPopup == null || !openedPopup.IsOpen, popupForegroundConfirmed };
     }
 
     private static bool ProcessExists(int id)
@@ -216,4 +239,14 @@ internal static class Program
     private static T Control<T>(MainWindow window, string name) where T : class => (T)window.FindName(name);
     private static void Set(MainWindow window, string name, object value) => typeof(MainWindow).GetField(name, Private)!.SetValue(window, value);
     private static object? Invoke(MainWindow window, string name, params object?[] args) => typeof(MainWindow).GetMethod(name, Private)!.Invoke(window, args);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hwnd);
 }

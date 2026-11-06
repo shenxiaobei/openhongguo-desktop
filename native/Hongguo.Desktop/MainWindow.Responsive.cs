@@ -176,6 +176,7 @@ public partial class MainWindow
                 Width = Math.Min(340, Math.Max(1, RootLayout.ActualWidth - 24)),
                 Height = Math.Min(560, Math.Max(1, RootLayout.ActualHeight - 36))
             };
+            ConfigurePlaybackPopup(_episodePickerPopup);
             _episodePickerPopup.Closed += (_, _) => RestoreEpisodePickerPanels();
             _episodePickerPopup.IsOpen = true;
         }

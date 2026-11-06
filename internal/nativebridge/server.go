@@ -19,7 +19,7 @@ import (
 	"github.com/beilunyang/openhongguo/sdk/model"
 )
 
-const Version = "0.3.4-native.1"
+const Version = "1.0-native.1"
 
 type Service interface {
 	Discover(context.Context, sdk.DiscoverOptions) (*sdk.Page[model.SeriesSummary], error)
@@ -31,6 +31,10 @@ type Service interface {
 
 type shortRankService interface {
 	ShortRank(context.Context, sdk.ShortRankQuery) (*model.ShortRanking, error)
+}
+
+type searchSuggestionService interface {
+	Suggest(context.Context, string) ([]model.Suggestion, error)
 }
 
 type shortFilterService interface {
@@ -279,6 +283,34 @@ func (s *Server) Dispatch(ctx context.Context, request Request) (any, error) {
 			}
 		}
 		return nil, sdk.ErrContentUnavailable
+	case "suggest":
+		query := strings.TrimSpace(args.Query)
+		if query == "" || len([]rune(query)) > 100 {
+			return nil, errInvalidInput
+		}
+		service, ok := s.Service.(searchSuggestionService)
+		if !ok {
+			return nil, sdk.ErrContentUnavailable
+		}
+		items, err := service.Suggest(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		// 联想只提交显示词；Keyword 可能是直达内容 ID，不作为搜索文本。
+		words := make([]string, 0, 8)
+		seen := make(map[string]bool)
+		for _, item := range items {
+			word := strings.TrimSpace(item.Text)
+			if word == "" || len([]rune(word)) > 100 || seen[word] {
+				continue
+			}
+			seen[word] = true
+			words = append(words, word)
+			if len(words) == 8 {
+				break
+			}
+		}
+		return words, nil
 	case "search":
 		query := strings.TrimSpace(args.Query)
 		if query == "" || len([]rune(query)) > 100 {

@@ -1,6 +1,6 @@
 # 红果原生桌面版
 
-**OpenHongguo Desktop · v0.3.8 · Windows 10 / 11 x64**
+**OpenHongguo Desktop · 1.0 · Windows 10 / 11 x64**
 
 一个使用 WPF 原生窗口、内嵌视频播放器的 Windows 短剧客户端。支持搜索找剧、题材筛选、排行榜、连续推荐、选集播放和观看记录。
 
@@ -8,20 +8,28 @@
 
 下载完整分发包并解压，双击其中的 `红果原生桌面版.exe` 即可使用。.NET 桌面运行时、SDK 桥和视频组件已内置，使用时无需另装 Edge、mpv、ffplay 或 ffmpeg。
 
-当前 v0.3.8 修复了播放控制栏浮在其他应用上的问题：切换窗口或最小化时收起浮层，后台鼠标活动不再重新打开；沉浸控制栏移除灰色渐变底板。
+## 1.0 更新
+
+- 原生 Windows 单 EXE，内嵌视频播放，不依赖浏览器或本地网页服务。
+- 默认完整显示，缩窗、窗口内全屏和最大化时按比例适配；需要裁边时可主动选择「裁切铺满」。
+- 透明紧凑控制栏、真实搜索联想、下一集预解码、官方系列跨季连播，以及按顺序保存观看进度。
+- 空白标题栏，隐藏左侧小图标，保留拖动区域与最小化、最大化、关闭按钮；窗口内全屏与 F11 屏幕全屏独立。
+- 收起跨应用浮层，并约束原生窗口层级，减少切换到其他应用时的覆盖。
+
+**验证边界：**最新标题栏专项 11 项及单 EXE 独立启动通过；透明控制层仍有前台交互未完成验收，实际桌面截图核对因捕获超时未完成，不代表全部播放路径已通过。详细结果与本地历史见[验证与范围](docs/native-desktop.md#验证与范围)。
 
 ## 功能
 
 | 功能 | 当前实现 |
 |---|---|
-| 搜索与发现 | 按剧名或关键词搜索，支持「剧集 / 综合 / 视频」分类和分页；新搜索回到列表顶部 |
+| 搜索与发现 | 输入约 300 ms 后显示最多 8 条服务端联想，支持方向键或鼠标选词；「剧集 / 综合 / 视频」分类和分页，新搜索回到列表顶部 |
 | 按题材找剧 | 组合选择平台提供的体裁、主题、人物设定、故事背景等条件 |
 | 排行榜 | 剧目逐行展示名次、封面与热度；顶部横向切换榜单，支持题材筛选、加载更多和每日刷新 |
 | 连续推荐 | 连续加载候选内容，在视频区域用滚轮或 ↑ / ↓ 切换另一部剧 |
 | 播放控制 | 拖动进度、暂停、音量、0.5–3 倍速，以及当前分集实际提供的画质档位 |
 | 自动连播 | 提前缓冲同一季的下一集；确认官方合集关系及下一季可播放时，支持同系列跨季连播 |
 | 观看记录 | 带封面的并列卡片，保存集数与播放位置，继续上次观看 |
-| 窗口适配 | 视频保持比例，支持竖屏和横屏；小窗口收拢侧栏与次要控制，应用不设置最小宽高 |
+| 窗口适配 | 默认保持完整画面，可为当前窗口尺寸主动选择「裁切铺满」；调整尺寸、进入全屏或系统最大化时恢复完整显示，小窗口收拢侧栏与次要控制，应用不设置最小宽高 |
 | 沉浸播放 | 窗口内全屏和屏幕全屏；透明控制栏，静止约 3 秒后隐藏控制栏与鼠标 |
 | 封面与统计 | 解码平台真实海报；展示接口提供的播放、追剧、本集点赞和评论数量 |
 
@@ -29,17 +37,16 @@
 
 ## 下载与运行
 
-在[本仓库 v0.3.8 Releases](https://github.com/shenxiaobei/openhongguo-desktop/releases/tag/v0.3.8) 页面选择 **Windows x64 完整分发包**，也可直接点击下表下载：
+当前版本为 **1.0**。从[本仓库 v1.0 Releases](https://github.com/shenxiaobei/openhongguo-desktop/releases/tag/v1.0) 下载 **Windows x64 完整分发包**：
 
 | 文件 | 用途 |
 |---|---|
-| [OpenHongguo-Desktop-v0.3.8-windows-x64.zip](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.8/OpenHongguo-Desktop-v0.3.8-windows-x64.zip) | 使用者下载的完整分发包，包含 EXE、说明和许可证 |
-| [OpenHongguo-Desktop-v0.3.8-windows-x64.exe](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.8/OpenHongguo-Desktop-v0.3.8-windows-x64.exe) | 单独 EXE；建议下载完整包以保留说明和第三方许可证 |
-| [openhongguo-native-runtime-v0.3.7-windows-x64.zip](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v0.3.7/openhongguo-native-runtime-v0.3.7-windows-x64.zip) | 开发者从源码构建时使用的原生运行库包 |
+| [OpenHongguo-Desktop-v1.0-windows-x64.zip](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v1.0/OpenHongguo-Desktop-v1.0-windows-x64.zip) | 完整分发包，包含 EXE、使用说明、组件来源和许可证 |
+| [OpenHongguo-Desktop-v1.0-windows-x64.exe](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v1.0/OpenHongguo-Desktop-v1.0-windows-x64.exe) | 单独 EXE；建议下载完整包以保留说明和第三方许可证 |
 
 1. 解压完整分发包，双击 `红果原生桌面版.exe`。
-2. 在「发现」「排行榜」或搜索结果中点击剧目，进入播放页。
-3. 通过选集、进度条、倍速和画质菜单调整观看；小窗口下部分设置位于「更多」。
+2. 在「发现」「排行榜」或搜索结果中点击剧目，进入播放页。输入关键词时会显示服务端联想：↑ / ↓ 选词，Enter 搜索选中词，未选词则直接搜索当前输入；Esc 收起，也可用鼠标点击候选。失焦、切换应用或调整窗口时会收起候选。
+3. 通过选集、进度条和齿轮「播放设置」调整观看；倍速、画质、画面模式和自动连播均在设置中。
 4. 退出时保存观看进度，下次从「观看记录」继续。
 
 请保留分发包中的第三方许可证和组件来源说明。GitHub 附件采用英文文件名，完整包内的程序名称保持为 `红果原生桌面版.exe`。
@@ -52,13 +59,13 @@
 |---|---|
 | 空格 | 暂停 / 继续 |
 | ← / → | 快退 / 快进 5 秒 |
-| 播放器右下角全屏按钮 | 窗口内全屏，视频铺满当前窗口客户区，保留系统标题栏及窗口大小 |
-| 标题栏最大化按钮 | 系统窗口最大化 / 还原 |
-| F11 或双击视频 | 进入 / 退出屏幕全屏 |
+| 播放器全屏按钮 | 窗口内全屏，播放区域扩展到当前客户区，保留窗口大小、位置及系统标题栏；进入时恢复完整画面 |
+| 标题栏最大化按钮 | 按系统工作区最大化 / 还原窗口，保留标题栏；最大化时恢复完整画面 |
+| F11 或双击视频 | 进入 / 退出屏幕全屏，进入时隐藏系统标题栏并恢复完整画面 |
 | Esc | 先退出屏幕全屏，再退出窗口内全屏 |
 | 视频区域滚轮或 ↑ / ↓ | 在「连续推荐」模式中切换另一部剧 |
 
-两种沉浸模式下，移动鼠标或操作快捷键会重新显示控制栏；拖动进度、悬停控制区或打开菜单时保持可见。视频始终保持原始比例，空余区域保留黑边。窗口可继续缩小，但原生标题栏仍受 Windows 系统边界约束。
+两种沉浸模式下，鼠标接近顶部或底部、操作快捷键会重新显示控制栏；中央移动只恢复鼠标。拖动进度、悬停控制区或打开菜单时保持可见。「全屏」控制播放区域布局，进入窗口内全屏、屏幕全屏及系统最大化时均恢复「完整显示」，按比例保留全部画面，必要时留黑边。只有主动在齿轮菜单选择「画面模式 → 裁切铺满」时才放大并裁切边缘，可能切掉字幕，人物保持比例。模式同步到当前与预加载播放器；窗口尺寸不变时，后续切集沿用当前设置。调整窗口宽高或使用上述三个窗口入口，会同时将两个播放器恢复为完整显示；如仍需裁切，可在新尺寸下重新选择。窗口可继续缩小，但原生标题栏仍受 Windows 系统边界约束。
 
 ## 连播、推荐与排行榜
 
@@ -94,10 +101,10 @@
 
 构建环境：**Windows x64、Go 1.22+、.NET 9 SDK、PowerShell**，以及恢复 NuGet 依赖所需的网络连接。运行成品无需安装这些开发工具。
 
-源码保留运行库的许可证和头文件，DLL 通过单独的运行库 ZIP 分发。先将 `openhongguo-native-runtime-v0.3.7-windows-x64.zip` 放入源码同级的 `Releases/`，然后在仓库根目录执行：
+源码保留运行库的许可证和头文件，DLL 通过单独的[原生运行库 ZIP](https://github.com/shenxiaobei/openhongguo-desktop/releases/download/v1.0/openhongguo-native-runtime-v1.0-windows-x64.zip) 分发（仅开发构建使用）。先将 `openhongguo-native-runtime-v1.0-windows-x64.zip` 放入源码同级的 `Releases/`，然后在仓库根目录执行：
 
 ```powershell
-Expand-Archive -LiteralPath '..\Releases\openhongguo-native-runtime-v0.3.7-windows-x64.zip' -DestinationPath '.' -Force
+Expand-Archive -LiteralPath '..\Releases\openhongguo-native-runtime-v1.0-windows-x64.zip' -DestinationPath '.' -Force
 powershell -File scripts/build-native.ps1
 ```
 

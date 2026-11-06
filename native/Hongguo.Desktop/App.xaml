@@ -139,18 +139,18 @@
         <!-- 使用标准 Track 与 Thumb，保留定位、拖动和键盘行为。 -->
         <Style x:Key="SliderTrackButton" TargetType="RepeatButton">
             <Setter Property="Focusable" Value="False" />
-            <Setter Property="Height" Value="4" />
+            <Setter Property="Height" Value="3" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="{TemplateBinding Background}" CornerRadius="2" /></ControlTemplate></Setter.Value></Setter>
         </Style>
         <Style x:Key="TimelineThumb" TargetType="Thumb">
             <Setter Property="Width" Value="16" />
-            <Setter Property="Height" Value="24" />
+            <Setter Property="Height" Value="20" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Grid Background="Transparent"><Ellipse x:Name="ThumbDot" Width="10" Height="10" Fill="{StaticResource AccentBrush}" /></Grid>
+                        <Grid Background="Transparent"><Ellipse x:Name="ThumbDot" Width="8" Height="8" Fill="{StaticResource AccentBrush}" /></Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbDot" Property="Width" Value="13" /><Setter TargetName="ThumbDot" Property="Height" Value="13" /></Trigger>
                             <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbDot" Property="Fill" Value="White" /><Setter TargetName="ThumbDot" Property="Width" Value="13" /><Setter TargetName="ThumbDot" Property="Height" Value="13" /></Trigger>

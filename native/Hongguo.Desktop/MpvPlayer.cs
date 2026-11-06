@@ -38,6 +38,7 @@ public sealed class MpvPlayer : IDisposable
     private bool _disposed;
     private double _speed = 1;
     private double _volume = 100;
+    private bool _fillWindow;
     private MpvStatus _lastStatus = new();
 
     public event EventHandler? Ended;
@@ -66,6 +67,7 @@ public sealed class MpvPlayer : IDisposable
             SetOption("keep-open", "no");
             SetOption("keepaspect", "yes");
             SetOption("keepaspect-window", "no");
+            SetOption("video-unscaled", "no");
             SetOption("panscan", "0");
             SetOption("vo", "gpu-next");
             SetOption("gpu-api", "d3d11");
@@ -126,6 +128,7 @@ public sealed class MpvPlayer : IDisposable
             SetProperty("pause", paused ? "yes" : "no");
             SetProperty("speed", _speed.ToString("R", CultureInfo.InvariantCulture));
             SetProperty("volume", _volume.ToString("R", CultureInfo.InvariantCulture));
+            SetProperty("panscan", _fillWindow ? "1" : "0");
         }
     }
 
@@ -182,6 +185,17 @@ public sealed class MpvPlayer : IDisposable
             ThrowIfDisposed();
             _volume = Math.Clamp(volume, 0, 100);
             SetProperty("volume", _volume.ToString("R", CultureInfo.InvariantCulture));
+        }
+    }
+
+    public void SetFillWindow(bool fillWindow)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            // panscan 只做等比放大和裁切；完整显示仍保留原始画面比例。
+            SetProperty("panscan", fillWindow ? "1" : "0");
+            _fillWindow = fillWindow;
         }
     }
 

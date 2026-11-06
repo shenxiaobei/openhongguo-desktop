@@ -32,11 +32,18 @@ internal static class Program
     private static bool Closed;
     private static bool PositioningFixture;
     private static bool OverlayOnly;
+    private static bool OptionsOnly;
+    private static bool OptionsAfterOverlay;
+    private static bool VisibleForeground;
 
     [STAThread]
     private static int Main(string[] args)
     {
         OverlayOnly = args.Contains("--overlay-only");
+        OptionsAfterOverlay = args.Contains("--options-after-overlay");
+        OptionsOnly = args.Contains("--options-only") || OptionsAfterOverlay;
+        bool visualPreview = args.Contains("--visual-preview");
+        VisibleForeground = args.Contains("--visible-foreground");
         Directory.CreateDirectory("results");
         var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         LoadResources(app);
@@ -48,6 +55,16 @@ internal static class Program
         };
         app.Startup += async (_, _) =>
         {
+            if (visualPreview)
+            {
+                try { await RunVisualPreviewAsync(app); }
+                catch (Exception error)
+                {
+                    Console.WriteLine("本地预览启动失败：" + error.Message);
+                    app.Shutdown(1);
+                }
+                return;
+            }
             try { await RunAsync(); }
             catch (Exception error) { Record("harness", false, new { type = error.GetType().Name, error = error.Message }); }
             finally
@@ -64,11 +81,11 @@ internal static class Program
                     Window.Close();
                 }
                 if (DispatcherErrors.Count > 0) Record("dispatcher_errors", false, DispatcherErrors);
-                string report = OverlayOnly ? "results/overlay-only-smoke.json" : "results/window-cinema-smoke.json";
+                string report = VisibleForeground ? "results/visible-foreground-smoke.json" : OptionsOnly ? "results/options-only-smoke.json" : OverlayOnly ? "results/overlay-only-smoke.json" : "results/window-cinema-smoke.json";
                 File.WriteAllText(report, JsonSerializer.Serialize(new
                 {
-                    at = DateTimeOffset.Now, failures = Failures, tests = Tests, dispatcherErrors = DispatcherErrors,
-                    scope = OverlayOnly
+                    at = DateTimeOffset.Now, failures = Failures, tests = Tests, dispatcherErrors = DispatcherErrors, visibleForeground = VisibleForeground,
+                    scope = VisibleForeground ? "生产MainWindow和对照窗口在工作区可见，Opacity=1，ShowInTaskbar=true；仅本地媒体、自有窗口，严格系统前台/三秒/后台/资源断言。控制层测量仍临时隐藏独立Popup，PNG不含原生视频或桌面合成。" : OptionsOnly ? "生产MainWindow及Popup的快捷键/父级恢复定向验证；可先运行真实同进程激活浮层检查；无SDK后端或媒体。记录真实前台及Popup关闭生命周期，不代表视频桌面合成验证。" : OverlayOnly
                         ? "生产MainWindow与Popup；双自有透明离屏窗口通过Activate切换真实激活状态；实际DispatcherTimer三秒显隐；不启动SDK后端或播放器。控制层PNG与alpha检查来自RenderTargetBitmap，不包含视频或其他窗口像素"
                         : "真实媒体在自有屏幕外窗口；定位专项显式暂开Opacity=0浮层并隐藏原生视频。另使用双自有透明离屏窗口验证真实激活、后台活动、最小化及实际三秒闲置；PNG只含WPF控制层，不包含原生视频像素"
                 }, new JsonSerializerOptions { WriteIndented = true }));
@@ -88,6 +105,47 @@ internal static class Program
         app.Resources = (ResourceDictionary)XamlReader.Load(reader);
     }
 
+    private static async Task RunVisualPreviewAsync(System.Windows.Application app)
+    {
+        // 使用真实窗口与解码器，只替换内容来源；预览不启动后端或保存观看记录。
+        Window = new MainWindow
+        {
+            Title = "红果桌面版 1.0 · 本地视觉预览", Width = 1120, Height = 760,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen, ShowInTaskbar = true, ShowActivated = true
+        };
+        Window.Loaded -= (RoutedEventHandler)Delegate.CreateDelegate(typeof(RoutedEventHandler), Window,
+            typeof(MainWindow).GetMethod("Window_Loaded", Private)!);
+        app.MainWindow = Window;
+        Window.Closed += (_, _) => { Closed = true; app.Shutdown(); };
+        var episode = new EpisodeItem { Id = "local-preview", Number = 1, Playable = true, Title = "字幕保护样片" };
+        Field<ObservableCollection<EpisodeItem>>("_episodes").Add(episode);
+        Set("_currentEpisode", episode);
+        Set("_currentSeries", new SeriesItem { Id = "local-preview", Title = "字幕保护样片", EpisodeCount = 1 });
+        Control<TextBlock>("PlayingTitle").Text = "字幕保护 · 本地样片";
+        Control<TextBlock>("PlayingSubtitle").Text = "底部两行文字已烧录进视频；沉浸播放不再保留底部空带";
+        Control<TextBlock>("DetailTitle").Text = "字幕保护样片";
+        Control<TextBlock>("DetailCount").Text = "仅本地视觉验证";
+        Control<CheckBox>("AutoNextCheck").IsChecked = false;
+        Control<FrameworkElement>("PlayerControls").Opacity = 1;
+        Window.Show();
+        Invoke("ShowScreen", Control<Grid>("PlayerScreen"));
+        await Settle();
+        Invoke("EnsurePlayer");
+        Player = Field<MpvPlayer>("_player");
+        string sample = Path.GetFullPath("../mpv-smoke/sample.mp4");
+        Require(File.Exists(sample), "缺少本地字幕样片");
+        Player.Load(sample, null, null, paused: true);
+        Control<FrameworkElement>("VideoHost").Visibility = Visibility.Visible;
+        Control<FrameworkElement>("VideoPlaceholder").Visibility = Visibility.Collapsed;
+        await Wait(() => Player.GetStatus().FrameReady, 10_000);
+        Control<Slider>("SeekSlider").IsEnabled = true;
+        Control<Button>("PauseButton").IsEnabled = true;
+        Control<Button>("PauseButton").Content = "播放";
+        Field<DispatcherTimer>("_playerTimer").Start();
+        Require(Field<object?>("_backend") == null, "视觉预览意外启动后端");
+        Window.Activate();
+    }
+
     private static async Task RunAsync()
     {
         Window = new MainWindow
@@ -95,6 +153,14 @@ internal static class Program
             ShowInTaskbar = false, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual,
             Left = -3000, Top = 20, Width = 640, Height = 360, Opacity = 0
         };
+        if (VisibleForeground)
+        {
+            Window.Title = "透明浮条可见前台验证";
+            Window.Left = 40;
+            Window.Opacity = 1;
+            Window.ShowInTaskbar = true;
+            Window.ShowActivated = true;
+        }
         Window.Loaded -= (RoutedEventHandler)Delegate.CreateDelegate(typeof(RoutedEventHandler), Window, typeof(MainWindow).GetMethod("Window_Loaded", Private)!);
         InputMethod.SetIsInputMethodEnabled(Window, false);
         InputMethod.SetIsInputMethodSuspended(Window, true);
@@ -109,6 +175,12 @@ internal static class Program
         Invoke("ShowScreen", Control<Grid>("PlayerScreen"));
         await Settle();
         Require(Field<object?>("_backend") == null, "夹具意外启动了后端");
+        if (OptionsOnly)
+        {
+            if (OptionsAfterOverlay) await RunOverlayRegressionAsync();
+            await RunOptionsShortcutsAsync();
+            return;
+        }
         if (OverlayOnly)
         {
             await RunOverlayRegressionAsync();
@@ -139,11 +211,10 @@ internal static class Program
                 Require(Field<bool>("_windowCinema") && !Field<bool>("_fullscreen"), "右下角按钮没有只进入窗口内模式");
                 RequireSame(before, Snapshot(), "窗口内模式改变了外部窗口");
                 VerifyImmersiveLayout();
-                Require(Control<FrameworkElement>("VideoBorder").ActualHeight > normalVideoHeight, "视频没有使用释放的标题与底栏空间");
+                Require(Control<FrameworkElement>("VideoBorder").ActualHeight > normalVideoHeight, "视频没有使用释放的标题空间");
                 object native = await VerifyNativeVideo();
                 object overlay = VerifyOverlayState();
                 Capture(Control<FrameworkElement>("RootLayout"), $"results/window-cinema-{width}x{height}.png");
-                Capture(Control<FrameworkElement>("PlayerControls"), $"results/window-cinema-controls-{width}x{height}.png");
                 Click("FullscreenButton");
                 await Settle();
                 Require(!Field<bool>("_windowCinema") && !Field<bool>("_fullscreen"), "再次点击没有退出窗口内模式");
@@ -152,6 +223,258 @@ internal static class Program
                 return new { before, after = Snapshot(), native, overlay, normalVideoHeight };
             });
         }
+
+        await Check("compact_toolbar_settings_and_shared_volume_state", async () =>
+        {
+            await ResetNormal(1280, 800);
+            Require(Control<FrameworkElement>("SettingsGroup").Visibility == Visibility.Collapsed, "大窗口仍常驻倍速与画质设置");
+            Require(Control<FrameworkElement>("PlaybackOptionsButton").IsVisible, "大窗口没有设置入口");
+            Require(!Control<FrameworkElement>("SpeedCombo").IsVisible && !Control<FrameworkElement>("QualityCombo").IsVisible,
+                "倍速或画质仍占主栏空间");
+            Slider toolbarVolume = Control<Slider>("ToolbarVolumeSlider");
+            Slider settingsVolume = Control<Slider>("VolumeSlider");
+            ComboBox speed = Control<ComboBox>("SpeedCombo");
+            CheckBox autoNext = Control<CheckBox>("AutoNextCheck");
+            double originalVolume = settingsVolume.Value;
+            int originalSpeed = speed.SelectedIndex;
+            bool? originalAutoNext = autoNext.IsChecked;
+            try
+            {
+                toolbarVolume.Value = 37;
+                await Settle();
+                Require(Math.Abs(settingsVolume.Value - 37) < 0.01 && Math.Abs(Player.GetStatus().Volume - 37) < 0.01,
+                    "主栏音量没有更新设置控件及真实播放器");
+                await ActivateOwnWindow(Window);
+                Click("PlaybackOptionsButton");
+                await Settle();
+                Require(Field<Popup?>("_playbackOptionsPopup")?.IsOpen == true && !speed.IsVisible,
+                    "紧凑设置未显示或仍展示大下拉框");
+                MenuControl<Slider>("PlaybackMenuVolume").Value = 73;
+                MenuControl<CheckBox>("PlaybackMenuAutoNext").IsChecked = false;
+                ClickMenu("PlaybackSpeedMenuButton");
+                await Settle();
+                ClickMenu("PlaybackSpeedOption4");
+                await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                await Settle();
+                Require(Math.Abs(toolbarVolume.Value - 73) < 0.01 && Math.Abs(Player.GetStatus().Volume - 73) < 0.01,
+                    "设置音量没有同步主栏及真实播放器");
+                Require(Math.Abs(Player.GetStatus().Speed - 1.5) < 0.01, "设置中的倍速没有作用于真实播放器");
+                Require(speed.SelectedIndex == 4 && autoNext.IsChecked == false, "关闭设置丢失播放状态");
+                Require(Control<FrameworkElement>("SettingsGroup").Visibility == Visibility.Collapsed
+                    && Control<FrameworkElement>("SettingsGroup").Parent == Control<Grid>("ControlGroups"),
+                    "关闭设置没有恢复隐藏的原父级");
+                return new { settingsOnly = true, toolbarVolume = 37, settingsVolume = 73, actualSpeed = 1.5,
+                    autoNextPreserved = true, menuClickUpdatesOriginalState = true, largeCombosStayHidden = true };
+            }
+            finally
+            {
+                Invoke("ClosePlaybackOptions");
+                await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                settingsVolume.Value = originalVolume;
+                speed.SelectedIndex = originalSpeed;
+                autoNext.IsChecked = originalAutoNext;
+            }
+        });
+
+        await Check("compact_menu_pages_render_and_quality_click_updates_source", async () =>
+        {
+            await ResetNormal(1120, 760);
+            await ActivateOwnWindow(Window);
+            ComboBox quality = Control<ComboBox>("QualityCombo");
+            System.Collections.IEnumerable? originalSource = quality.ItemsSource;
+            object? originalSelection = quality.SelectedItem;
+            bool originalEnabled = quality.IsEnabled;
+            try
+            {
+                quality.ItemsSource = new[] { new PlaybackQuality { Definition = "best" }, new PlaybackQuality { Definition = "worst" } };
+                quality.SelectedIndex = 0;
+                quality.IsEnabled = true;
+                Click("FullscreenButton");
+                await Settle();
+                Click("PlaybackOptionsButton");
+                await Settle();
+                Popup menu = Field<Popup>("_playbackOptionsPopup");
+                FrameworkElement rootPage = (FrameworkElement)menu.Child;
+                Require(rootPage.ActualHeight < 280, "设置根页仍保留过多固定留白");
+                double rootHeight = rootPage.ActualHeight;
+                CaptureMenu("results/settings-menu-root.png");
+                ClickMenu("PlaybackSpeedMenuButton");
+                await Settle();
+                Require(ReferenceEquals(menu, Field<Popup>("_playbackOptionsPopup")), "倍速页新建了另一层菜单");
+                Require(MenuControl<Button>("PlaybackSpeedOption4").Tag == Control<ComboBox>("SpeedCombo").Items[4],
+                    "倍速选项没有绑定原控件状态");
+                CaptureMenu("results/settings-menu-speed.png");
+                ClickMenu("PlaybackMenuBack");
+                await Settle();
+                ClickMenu("PlaybackQualityMenuButton");
+                await Settle();
+                Require(ReferenceEquals(menu, Field<Popup>("_playbackOptionsPopup")), "画质页新建了另一层菜单");
+                Require(MenuControl<Button>("PlaybackQualityOption1").Tag == quality.Items[1], "画质选项没有绑定原始档位");
+                CaptureMenu("results/settings-menu-quality.png");
+                ClickMenu("PlaybackQualityOption1");
+                await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                Require(quality.SelectedItem is PlaybackQuality selected && selected.Definition == "worst",
+                    "实际画质菜单点击没有更新原选项");
+                Require(!Control<FrameworkElement>("SettingsGroup").IsVisible, "菜单切页展示了隐藏状态源");
+                return new { samePopupPages = true, naturalRootHeight = rootHeight, qualityMenuSelectsOriginalOption = true,
+                    artifacts = new[] { "results/settings-menu-root.png", "results/settings-menu-speed.png", "results/settings-menu-quality.png" },
+                    nativeVideoPixelsIncluded = false, onlineQualityReloadTested = false };
+            }
+            finally
+            {
+                Invoke("ClosePlaybackOptions");
+                await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                quality.ItemsSource = originalSource;
+                quality.SelectedItem = originalSelection;
+                quality.IsEnabled = originalEnabled;
+            }
+        });
+
+        await Check("menu_stale_quality_and_episode_entry_preserve_valid_state", async () =>
+        {
+            await ResetNormal(1120, 760);
+            await ActivateOwnWindow(Window);
+            ComboBox quality = Control<ComboBox>("QualityCombo");
+            System.Collections.IEnumerable? originalSource = quality.ItemsSource;
+            object? originalSelection = quality.SelectedItem;
+            bool originalEnabled = quality.IsEnabled;
+            string originalQuality = Field<string>("_quality");
+            string originalSuccessfulQuality = Field<string>("_lastSuccessfulQuality");
+            PlaybackQuality[] originalQualities = Field<ObservableCollection<PlaybackQuality>>("_qualities").ToArray();
+            try
+            {
+                quality.ItemsSource = new[] { new PlaybackQuality { Definition = "best" }, new PlaybackQuality { Definition = "worst" } };
+                quality.SelectedIndex = 0;
+                quality.IsEnabled = true;
+                Click("FullscreenButton");
+                await Settle();
+                Click("PlaybackOptionsButton");
+                await Settle();
+                ClickMenu("PlaybackQualityMenuButton");
+                await Settle();
+                Button staleOption = MenuControl<Button>("PlaybackQualityOption1");
+                var replacement = new PlaybackQuality { Definition = "720p" };
+                quality.ItemsSource = new[] { replacement };
+                quality.SelectedItem = replacement;
+                staleOption.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Require(ReferenceEquals(quality.SelectedItem, replacement), "已失效的画质按钮覆盖了当前有效档位");
+                Require(Field<string>("_quality") == originalQuality, "失效画质按钮触发了播放档位变更");
+                Invoke("ClosePlaybackOptions");
+                await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+
+                Click("PlaybackOptionsButton");
+                await Settle();
+                Popup menu = Field<Popup>("_playbackOptionsPopup");
+                Require(menu.IsOpen, "分集入口回归的设置未打开");
+                // 调用生产分集入口；无后端时仍应先回收旧菜单，不产生在线请求。
+                await (Task)Invoke("PlayEpisodeAsync", new EpisodeItem { Id = "next-menu-regression", Number = 2, Playable = true }, false)!;
+                await Wait(() => !menu.IsOpen && Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                Require(Field<object?>("_backend") == null, "菜单状态回归意外启动后端");
+                return new { staleQualityIgnored = true, episodeEntryClosesMenu = true, backendStarted = false,
+                    onlineEpisodeTransitionTested = false };
+            }
+            finally
+            {
+                Invoke("ClosePlaybackOptions");
+                await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                ObservableCollection<PlaybackQuality> qualities = Field<ObservableCollection<PlaybackQuality>>("_qualities");
+                qualities.Clear();
+                foreach (PlaybackQuality item in originalQualities) qualities.Add(item);
+                quality.ItemsSource = originalSource;
+                quality.SelectedItem = originalSelection;
+                quality.IsEnabled = originalEnabled;
+                Set("_quality", originalQuality);
+                Set("_lastSuccessfulQuality", originalSuccessfulQuality);
+            }
+        });
+
+        await Check("subtitle_safe_layout_remains_accessible_in_small_windows", async () =>
+        {
+            var sizes = new List<object>();
+            foreach ((int width, int height) in new[] { (320, 240), (480, 320), (784, 517), (1280, 800) })
+            {
+                await ResetNormal(width, height);
+                Rect controls = ScreenBounds(Control<FrameworkElement>("PlayerControls"));
+                Rect video = ScreenBounds(Control<FrameworkElement>("VideoBorder"));
+                Require(video.Height > 1 && video.Bottom <= controls.Top + 2, "普通窗口控制栏覆盖视频");
+                foreach (string name in new[] { "SeekSlider", "PauseButton", "NextButton", "PlaybackOptionsButton", "FullscreenButton" })
+                {
+                    FrameworkElement element = Control<FrameworkElement>(name);
+                    Require(element.IsVisible, "小窗口主控不可见：" + name);
+                    RequireContains(controls, ScreenBounds(element), "小窗口主控越过控制区：" + name);
+                }
+                object normalNative = await VerifyNativeVideo();
+                Click("FullscreenButton");
+                await Settle();
+                VerifyImmersiveLayout();
+                Rect immersiveVideo = ScreenBounds(Control<FrameworkElement>("VideoBorder"));
+                double controlHeight = Control<RowDefinition>("PlaybackControlsRow").ActualHeight;
+                Invoke("HideFullscreenControls");
+                await Settle();
+                RequireNear(immersiveVideo, ScreenBounds(Control<FrameworkElement>("VideoBorder")), "收起控制栏改变视频尺寸");
+                Require(controlHeight < 1 && Control<RowDefinition>("PlaybackControlsRow").ActualHeight < 1,
+                    "沉浸播放仍保留底部空带");
+                object immersiveNative = await VerifyNativeVideo();
+                sizes.Add(new { width, height, controlHeight, normalNative, immersiveNative, stableAfterHide = true });
+            }
+            return new { sizes, normalControlsOutsideVideo = true, immersiveHasNoBottomBand = true, testedWithRealMedia = true };
+        });
+
+        await Check("landscape_media_has_no_reserved_bottom_band_or_caption_overlap", async () =>
+        {
+            string landscape = Path.GetFullPath("../mpv-smoke/sample-landscape.mp4");
+            string portrait = Path.GetFullPath("../mpv-smoke/sample.mp4");
+            Require(File.Exists(landscape), "缺少1280×720横屏字幕样片");
+            try
+            {
+                await ResetNormal(1280, 800);
+                Player.Load(landscape, null, null, paused: true);
+                await Wait(() => Player.GetStatus().FrameReady && Player.GetStatus().VideoWidth == 1280, 10000);
+                Click("FullscreenButton");
+                await Settle();
+                VerifyImmersiveLayout();
+                object native = await VerifyNativeVideo(1280, 720);
+                Rect before = ScreenBounds(Control<FrameworkElement>("VideoBorder"));
+                Invoke("HideFullscreenControls");
+                await Settle();
+                RequireNear(before, ScreenBounds(Control<FrameworkElement>("VideoBorder")), "横屏控件隐藏改变视频尺寸");
+                PositioningFixture = true;
+                Control<FrameworkElement>("VideoHost").Visibility = Visibility.Hidden;
+                Window.Left = 50;
+                Window.Top = 20;
+                await Settle();
+                object overlay = VerifyOverlay();
+                Popup popup = Field<Popup>("_fullscreenControls");
+                bool opened = popup.IsOpen;
+                DispatcherTimer timer = Field<DispatcherTimer>("_fullscreenTimer");
+                bool timerEnabled = timer.IsEnabled;
+                timer.Stop();
+                popup.IsOpen = true;
+                await Settle();
+                try
+                {
+                    Rect client = NativeClientBounds(Control<NativeVideoHost>("VideoHost").VideoHandle);
+                    double top = ReadNumber("osd-dimensions/mt"), bottom = ReadNumber("osd-dimensions/mb");
+                    double imageHeight = ReadNumber("osd-dimensions/h") - top - bottom;
+                    Rect captions = new(client.Left, client.Top + top + imageHeight * 0.82, client.Width, imageHeight * 0.18);
+                    Require(!ScreenBounds(Control<FrameworkElement>("PlayerControls")).IntersectsWith(captions),
+                        "顶部浮条进入横屏实际画面的底部字幕区域");
+                }
+                finally
+                {
+                    popup.IsOpen = opened;
+                    if (timerEnabled) timer.Start();
+                }
+                return new { native, overlay, decodedLandscape = new[] { 1280, 720 }, fixedBottomBandAbsent = true,
+                    stableAfterHide = true, actualImageCaptionRegionUncovered = true, nativeVideoPixelsIncluded = false };
+            }
+            finally
+            {
+                await ResetNormal(640, 360);
+                Player.Load(portrait, null, null, paused: true);
+                await Wait(() => Player.GetStatus().FrameReady && Player.GetStatus().VideoWidth == 360, 10000);
+            }
+        });
 
         await Check("window_cinema_moves_resizes_and_maximizes_with_native_caption", async () =>
         {
@@ -187,12 +510,63 @@ internal static class Program
             await Settle();
             VerifyNormalLayout();
             PositioningFixture = false;
-            Window.Left = -3000;
+            Window.Left = VisibleForeground ? 40 : -3000;
             Window.Top = 20;
             Control<FrameworkElement>("VideoHost").Visibility = Visibility.Visible;
             await Settle();
             object restoredNative = await VerifyNativeVideo();
             return new { initial, moved, resizedOverlay, maximizedOverlay, nativeCaptionPreserved = true, invisiblePositioningFixture = true, restoredNative };
+        });
+
+        await Check("compact_settings_fit_window_and_open_away_from_toolbar", async () =>
+        {
+            var layouts = new List<object>();
+            try
+            {
+                foreach ((int width, int height) in new[] { (320, 240), (640, 360), (950, 640) })
+                {
+                    await ResetNormal(width, height);
+                    PositioningFixture = true;
+                    Control<FrameworkElement>("VideoHost").Visibility = Visibility.Hidden;
+                    Window.Left = 50;
+                    Window.Top = 20;
+                    await Settle();
+                    await ActivateOwnWindow(Window);
+                    foreach (bool immersive in new[] { false, true })
+                    {
+                        if (immersive)
+                        {
+                            Click("FullscreenButton");
+                            await Settle();
+                        }
+                        Click("PlaybackOptionsButton");
+                        await Settle();
+                        Popup options = Field<Popup>("_playbackOptionsPopup");
+                        Require(options.IsOpen, "设置定位检查未打开菜单");
+                        Rect panel = ScreenBounds((FrameworkElement)options.Child);
+                        Rect controls = ScreenBounds(Control<FrameworkElement>("PlayerControls"));
+                        Rect root = ScreenBounds(Control<FrameworkElement>("RootLayout"));
+                        if (immersive)
+                            Require(panel.Top >= controls.Bottom - 2, "顶部菜单没有向下展开：" + panel + " / " + controls);
+                        else
+                            Require(panel.Bottom <= controls.Top + 2, "普通窗口菜单遮住主栏：" + panel + " / " + controls);
+                        RequireContains(root, panel, "设置面板越过当前窗口客户区");
+                        Require(((FrameworkElement)options.Child).ActualWidth <= 260 && ((FrameworkElement)options.Child).ActualHeight <= 280,
+                            "根菜单仍有过大的固定尺寸：" + panel);
+                        layouts.Add(new { width, height, immersive, panel = panel.ToString(CultureInfo.InvariantCulture),
+                            controls = controls.ToString(CultureInfo.InvariantCulture), toolbarUncovered = true, compactRootMenu = true });
+                        Invoke("ClosePlaybackOptions");
+                        await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                    }
+                }
+                return new { layouts, actualPopupBoundsMeasured = true, invisiblePositioningFixture = true };
+            }
+            finally
+            {
+                Invoke("ClosePlaybackOptions");
+                await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                await ResetNormal(640, 360);
+            }
         });
 
         await Check("f11_screen_fullscreen_preserves_normal_window", async () =>
@@ -259,40 +633,12 @@ internal static class Program
 
         await RunOverlayRegressionAsync();
 
-        await Check("options_shortcuts_and_navigation_restore_parents", async () =>
-        {
-            await ResetNormal(640, 360);
-            Require(Window.Activate(), "设置快捷键夹具激活请求失败");
-            await Wait(() => Window.IsActive, 3000);
-            Click("FullscreenButton");
-            await Settle();
-            Click("PlaybackOptionsButton");
-            await Settle();
-            Popup options = Field<Popup>("_playbackOptionsPopup");
-            Require(options.IsOpen, "影院播放设置未打开");
-            RaiseKey((FrameworkElement)options.Child, Key.F11);
-            await Settle();
-            Require(Field<bool>("_fullscreen") && Field<Popup?>("_playbackOptionsPopup") == null, "设置里的F11未切换或未收起弹层");
-            Require(Control<FrameworkElement>("SettingsGroup").Parent == Control<Grid>("ControlGroups"), "切全屏后设置父级未恢复");
-            RaiseKey(Window, Key.Escape);
-            await Settle();
-            Require(Field<bool>("_windowCinema") && !Field<bool>("_fullscreen"), "设置F11返回丢失原影院模式");
-            Invoke("ShowScreen", Control<Grid>("CatalogScreen"));
-            await Settle();
-            Require(!Field<bool>("_windowCinema") && !Field<bool>("_fullscreen"), "离开播放页没有退出影院状态");
-            Require(Field<Popup?>("_fullscreenControls") == null && Field<Popup?>("_playbackOptionsPopup") == null, "导航后仍有播放浮层");
-            Require(Control<FrameworkElement>("PlayerControls").Parent == Control<Grid>("CinemaLayout"), "导航后播放控制父级未恢复");
-            Invoke("ShowScreen", Control<Grid>("PlayerScreen"));
-            await Settle();
-            VerifyNormalLayout();
-            return new { f11FromOptions = true, previousCinemaRestored = true, navigationResetModes = true, parentRestored = true, backendStarted = Field<object?>("_backend") != null };
-        });
+        await RunOptionsShortcutsAsync();
 
         await Check("single_close_from_window_cinema_releases_player_and_popups", async () =>
         {
             await ResetNormal(640, 360);
-            Require(Window.Activate(), "关闭夹具激活请求失败");
-            await Wait(() => Window.IsActive, 3000);
+            await ActivateOwnWindow(Window);
             Click("FullscreenButton");
             await Settle();
             Popup overlay = Field<Popup>("_fullscreenControls");
@@ -311,6 +657,52 @@ internal static class Program
         });
     }
 
+    private static async Task RunOptionsShortcutsAsync()
+    {
+        await Check("options_shortcuts_and_navigation_restore_parents", async () =>
+        {
+            await ResetNormal(640, 360);
+            await ActivateOwnWindow(Window);
+            Click("FullscreenButton");
+            await Settle();
+            Click("PlaybackOptionsButton");
+            await Settle();
+            Popup options = Field<Popup>("_playbackOptionsPopup");
+            Require(options.IsOpen, "影院播放设置未打开");
+            bool optionsClosed = false;
+            options.Closed += (_, _) => optionsClosed = true;
+            object beforeEscape = ForegroundDiagnostic();
+            RaiseKey(Control<FrameworkElement>("PlaybackOptionsButton"), Key.Escape);
+            object immediatelyAfterEscape = ForegroundDiagnostic();
+            // 淡出结束后才触发Closed，等待真实生命周期，不用固定150ms代替菜单归还完成。
+            await Wait(() => optionsClosed && Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+            await Settle();
+            Require(Field<Popup?>("_playbackOptionsPopup") == null && Field<bool>("_windowCinema") && !Field<bool>("_fullscreen"),
+                "主栏齿轮上的Esc没有只收起设置 / " + JsonSerializer.Serialize(new { beforeEscape, immediatelyAfterEscape, afterSettle = ForegroundDiagnostic() }));
+            Click("PlaybackOptionsButton");
+            await Settle();
+            options = Field<Popup>("_playbackOptionsPopup");
+            RaiseKey((FrameworkElement)options.Child, Key.F11);
+            await Settle();
+            Require(Field<bool>("_fullscreen") && Field<Popup?>("_playbackOptionsPopup") == null, "设置里的F11未切换或未收起弹层");
+            Require(Control<FrameworkElement>("SettingsGroup").Parent == Control<Grid>("ControlGroups"), "切全屏后设置父级未恢复");
+            RaiseKey(Window, Key.Escape);
+            await Settle();
+            Require(Field<bool>("_windowCinema") && !Field<bool>("_fullscreen"), "设置F11返回丢失原影院模式");
+            Invoke("ShowScreen", Control<Grid>("CatalogScreen"));
+            await Settle();
+            Require(!Field<bool>("_windowCinema") && !Field<bool>("_fullscreen"), "离开播放页没有退出影院状态");
+            Require(Field<Popup?>("_fullscreenControls") == null && Field<Popup?>("_playbackOptionsPopup") == null, "导航后仍有播放浮层");
+            Require(Control<FrameworkElement>("PlayerControls").Parent == Control<Grid>("CinemaLayout"), "导航后播放控制父级未恢复");
+            Invoke("ShowScreen", Control<Grid>("PlayerScreen"));
+            await Settle();
+            VerifyNormalLayout();
+            return new { escapeFromToolbarClosesOnlyOptions = true, beforeEscape, immediatelyAfterEscape, f11FromOptions = true, previousCinemaRestored = true,
+                navigationResetModes = true, parentRestored = true, backendStarted = Field<object?>("_backend") != null };
+        });
+
+    }
+
     private static async Task RunOverlayRegressionAsync()
     {
         var other = new System.Windows.Window
@@ -319,6 +711,13 @@ internal static class Program
             WindowStartupLocation = WindowStartupLocation.Manual, Left = -3800, Top = 20,
             Width = 300, Height = 200, Opacity = 0
         };
+        if (VisibleForeground)
+        {
+            other.Left = 1100;
+            other.Top = 120;
+            other.Opacity = 1;
+            other.ShowInTaskbar = true;
+        }
         FrameworkElement controls = Control<FrameworkElement>("PlayerControls");
         bool hitTestVisible = controls.IsHitTestVisible;
         Visibility videoVisibility = Control<FrameworkElement>("VideoHost").Visibility;
@@ -327,10 +726,9 @@ internal static class Program
         try
         {
             // 激活只在本进程创建的两个窗口之间切换，不读取或操作用户的其他窗口。
-            Require(other.Activate(), "自有对照窗口激活请求失败");
-            await Wait(() => other.IsActive && !Window.IsActive, 3000);
+            await ActivateOwnWindow(other, Window);
 
-            await Check("overlay_has_no_backplate_and_renders_transparent_pixels", async () =>
+            await Check("overlay_is_compact_transparent_without_bottom_band", async () =>
             {
                 await ResetNormal(1100, 650);
                 Control<FrameworkElement>("VideoHost").Visibility = Visibility.Hidden;
@@ -341,7 +739,9 @@ internal static class Program
                 Popup popup = Field<Popup>("_fullscreenControls");
                 Require(!Window.IsActive && !popup.IsOpen, "非激活窗口进入影院时重开了控制浮层");
                 Require(Control<Border>("PlayerControls").Background is SolidColorBrush brush && brush.Color.A == 0,
-                    "沉浸控制层仍绘制整块底板");
+                    "悬浮控制层仍有可见底板背景");
+                Require(Control<Border>("PlayerControls").BorderBrush is SolidColorBrush outline && outline.Color.A == 0,
+                    "悬浮控制层仍有可见外框");
                 Require(Control<Border>("PlayerControls").Effect is System.Windows.Media.Effects.DropShadowEffect,
                     "透明控制层缺少用于辨认控件轮廓的阴影");
 
@@ -354,7 +754,7 @@ internal static class Program
                     // 暂开不可见浮层仅用于真实控件测量；此行为不计入生产显隐验证。
                     popup.IsOpen = true;
                     await Settle();
-                    bitmap = Capture(controls, "results/overlay-transparent-controls.png");
+                    bitmap = Capture(controls, "results/overlay-compact-controls.png");
                 }
                 finally
                 {
@@ -364,32 +764,58 @@ internal static class Program
                 int stride = bitmap.PixelWidth * 4;
                 byte[] pixels = new byte[stride * bitmap.PixelHeight];
                 bitmap.CopyPixels(pixels, stride, 0);
-                int[,] points = { { 1, bitmap.PixelHeight / 2 }, { bitmap.PixelWidth / 2, 1 }, { bitmap.PixelWidth / 2, bitmap.PixelHeight - 2 } };
-                var blankSamples = new List<object>();
+                int[,] points = { { 0, 0 }, { bitmap.PixelWidth - 1, 0 }, { 0, bitmap.PixelHeight - 1 }, { bitmap.PixelWidth - 1, bitmap.PixelHeight - 1 } };
+                var cornerSamples = new List<object>();
                 for (int index = 0; index < points.GetLength(0); index++)
                 {
                     int x = points[index, 0], y = points[index, 1];
                     byte alpha = pixels[y * stride + x * 4 + 3];
-                    blankSamples.Add(new { x, y, alpha });
-                    Require(alpha == 0, "控制层空白处仍有遮罩像素：" + x + "," + y + " alpha=" + alpha);
+                    cornerSamples.Add(new { x, y, alpha });
+                    Require(alpha == 0, "控制层空白角仍有底板像素：" + x + "," + y + " alpha=" + alpha);
                 }
                 int paintedPixels = 0;
+                int opaquePixels = 0;
                 for (int offset = 3; offset < pixels.Length; offset += 4)
+                {
                     if (pixels[offset] > 0) paintedPixels++;
-                Require(paintedPixels > 100, "控制层PNG没有实际渲染控件");
+                    if (pixels[offset] == 255) opaquePixels++;
+                }
+                byte panelAlpha = pixels[5 * stride + (bitmap.PixelWidth / 2) * 4 + 3];
+                Require(panelAlpha == 0, "悬浮条中部空白仍有底板像素");
+                int transparentPixels = bitmap.PixelWidth * bitmap.PixelHeight - paintedPixels;
+                Require(transparentPixels > bitmap.PixelWidth * bitmap.PixelHeight / 2, "控制层仍被大面积底板或阴影覆盖");
+                Require(paintedPixels > 100 && opaquePixels > 10, "透明控制层未渲染清晰控件，可能是空图");
+                var visibleControls = new List<object>();
+                foreach (string name in new[] { "PauseButton", "TimeText", "SeekSlider" })
+                {
+                    FrameworkElement control = Control<FrameworkElement>(name);
+                    Rect bounds = control.TransformToAncestor(controls).TransformBounds(new Rect(control.RenderSize));
+                    int visiblePixels = 0;
+                    int crispPixels = 0;
+                    for (int y = Math.Max(0, (int)Math.Floor(bounds.Top)); y < Math.Min(bitmap.PixelHeight, (int)Math.Ceiling(bounds.Bottom)); y++)
+                    for (int x = Math.Max(0, (int)Math.Floor(bounds.Left)); x < Math.Min(bitmap.PixelWidth, (int)Math.Ceiling(bounds.Right)); x++)
+                    {
+                        byte alpha = pixels[y * stride + x * 4 + 3];
+                        if (alpha > 0) visiblePixels++;
+                        if (alpha == 255) crispPixels++;
+                    }
+                    Require(control.IsVisible && visiblePixels > 5 && crispPixels > 0, "透明后控件内容消失：" + name);
+                    visibleControls.Add(new { name, bounds = bounds.ToString(CultureInfo.InvariantCulture), visiblePixels, crispPixels });
+                }
+                Require(Control<RowDefinition>("PlaybackControlsRow").ActualHeight < 1, "悬浮条仍占底部布局行");
+                Require(controls.ActualWidth <= 861 && controls.ActualHeight <= 45, "悬浮条没有保持紧凑尺寸");
                 Click("FullscreenButton");
                 await Settle();
                 Require(ReferenceEquals(Control<Border>("PlayerControls").Effect, normalEffect), "退出影院后未恢复原有Effect");
-                return new { width = bitmap.PixelWidth, height = bitmap.PixelHeight, blankSamples, paintedPixels, restoredEffect = true,
-                    artifact = "results/overlay-transparent-controls.png", nativeVideoPixelsIncluded = false };
+                return new { width = bitmap.PixelWidth, height = bitmap.PixelHeight, cornerSamples, panelAlpha, transparentPixels, paintedPixels, opaquePixels, visibleControls, restoredEffect = true,
+                    artifact = "results/overlay-compact-controls.png", nativeVideoPixelsIncluded = false, bottomBandAbsent = true };
             });
 
             await Check("inactive_activity_cannot_reopen_floating_controls", async () =>
             {
                 await ResetNormal(640, 360);
                 Control<FrameworkElement>("VideoHost").Visibility = Visibility.Hidden;
-                Require(other.Activate(), "对照窗口未获得激活请求");
-                await Wait(() => other.IsActive && !Window.IsActive, 3000);
+                await ActivateOwnWindow(other, Window);
                 Click("FullscreenButton");
                 Control<FrameworkElement>("VideoHost").Visibility = Visibility.Hidden;
                 await Settle();
@@ -410,8 +836,7 @@ internal static class Program
 
             await Check("active_window_real_three_second_timer_and_activity", async () =>
             {
-                Require(Window.Activate(), "播放夹具激活请求失败");
-                await Wait(() => Window.IsActive, 3000);
+                await ActivateOwnWindow(Window, other);
                 Popup popup = Field<Popup>("_fullscreenControls");
                 Require(popup.IsOpen, "真实Activated事件未恢复控制浮层");
                 Rect before = ScreenBounds(Control<FrameworkElement>("VideoBorder"));
@@ -432,8 +857,7 @@ internal static class Program
                 Popup options = Field<Popup>("_playbackOptionsPopup");
                 ((FrameworkElement)options.Child).IsHitTestVisible = false;
                 Require(options.IsOpen, "播放设置未打开");
-                Require(other.Activate(), "后台切换请求失败");
-                await Wait(() => other.IsActive && !Window.IsActive, 3000);
+                await ActivateOwnWindow(other, Window);
                 Require(!popup.IsOpen && Window.Cursor != Cursors.None, "真实Deactivated事件未收起控制浮层");
                 // Popup.Closed由Dispatcher异步送达，等待真实归还完成，不以激活状态同步变化代替它。
                 try
@@ -459,7 +883,7 @@ internal static class Program
                     layoutStable = true, controlsHitTestDisabledForInvisibleFixture = true };
             });
 
-            await Check("deactivation_closes_speed_and_quality_dropdowns", async () =>
+            await Check("deactivation_closes_actual_speed_and_quality_pages", async () =>
             {
                 Window.Width = 1100;
                 await Settle();
@@ -470,33 +894,22 @@ internal static class Program
                 quality.IsEnabled = true;
                 try
                 {
-                    foreach (string name in new[] { "SpeedCombo", "QualityCombo" })
+                    foreach (string name in new[] { "PlaybackSpeedMenuButton", "PlaybackQualityMenuButton" })
                     {
-                        Require(Window.Activate(), "下拉菜单检查激活请求失败");
-                        await Wait(() => Window.IsActive, 3000);
-                        ComboBox combo = Control<ComboBox>(name);
-                        combo.ApplyTemplate();
-                        Popup dropdown = (Popup)combo.Template.FindName("PART_Popup", combo);
-                        FrameworkElement child = (FrameworkElement)dropdown.Child;
-                        double opacity = child.Opacity;
-                        bool hitTest = child.IsHitTestVisible;
-                        child.Opacity = 0;
-                        child.IsHitTestVisible = false;
-                        try
-                        {
-                            combo.IsDropDownOpen = true;
-                            Require(combo.IsDropDownOpen && dropdown.IsOpen, "自有下拉菜单未实际打开：" + name);
-                            Require(other.Activate(), "下拉菜单后台切换请求失败");
-                            await Wait(() => other.IsActive && !Window.IsActive, 3000);
-                            Require(!combo.IsDropDownOpen && !dropdown.IsOpen, "后台仍保留下拉菜单：" + name);
-                            Require(!Field<Popup>("_fullscreenControls").IsOpen, "关闭下拉菜单时重开了后台控制层");
-                        }
-                        finally
-                        {
-                            combo.IsDropDownOpen = false;
-                            child.Opacity = opacity;
-                            child.IsHitTestVisible = hitTest;
-                        }
+                        await ActivateOwnWindow(Window, other);
+                        Click("PlaybackOptionsButton");
+                        await Settle();
+                        Popup menu = Field<Popup>("_playbackOptionsPopup");
+                        ClickMenu(name);
+                        await Settle();
+                        Require(menu.IsOpen && ReferenceEquals(menu, Field<Popup>("_playbackOptionsPopup"))
+                            && MenuControl<Button>("PlaybackMenuBack").IsVisible, "实际设置选项页未打开：" + name);
+                        ((FrameworkElement)menu.Child).IsHitTestVisible = false;
+                        await ActivateOwnWindow(other, Window);
+                        await Wait(() => !menu.IsOpen && Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                        Require(!Field<Popup>("_fullscreenControls").IsOpen, "关闭设置子页时重开了后台控制层");
+                        Require(!Control<ComboBox>("SpeedCombo").IsDropDownOpen && !quality.IsDropDownOpen,
+                            "新设置菜单仍打开了旧下拉浮层");
                     }
                 }
                 finally
@@ -504,15 +917,85 @@ internal static class Program
                     quality.ItemsSource = qualitySource;
                     quality.IsEnabled = qualityEnabled;
                 }
-                return new { speedClosed = true, qualityClosed = true, dropdownPixelsHiddenByFixture = true };
+                return new { actualSpeedPageClosed = true, actualQualityPageClosed = true, originalDropdownsUnused = true };
+            });
+
+            await Check("pointer_proximity_and_keyboard_keep_controls_reachable", async () =>
+            {
+                await ActivateOwnWindow(Window, other);
+                Popup popup = Field<Popup>("_fullscreenControls");
+                FrameworkElement root = Control<FrameworkElement>("RootLayout");
+                Rect initialVideo = ScreenBounds(Control<FrameworkElement>("VideoBorder"));
+                Invoke("HideFullscreenControls");
+                Invoke("SetFullscreenCursorHidden", true);
+                Point center = new(root.ActualWidth / 2, root.ActualHeight / 2);
+                Invoke("HandlePlayerPointerActivity", center);
+                await Settle();
+                Require(!popup.IsOpen && Window.Cursor != Cursors.None, "中央移动弹出整栏或未恢复鼠标");
+                Point bottom = new(root.ActualWidth / 2, root.ActualHeight - 10);
+                RaiseVideoPointerActivity(root.PointToScreen(bottom));
+                await Settle();
+                Require(popup.IsOpen, "原生指针靠近底部没有唤醒控制栏");
+                Invoke("HideFullscreenControls");
+                RaiseVideoPointerActivity(root.PointToScreen(new Point(root.ActualWidth / 2, 10)));
+                await Settle();
+                Require(popup.IsOpen, "原生指针靠近顶部没有唤醒控制栏");
+                Invoke("HideFullscreenControls");
+                RaiseVideoActivity();
+                await Settle();
+                Require(popup.IsOpen, "原生键盘活动未唤醒控制栏");
+                // 此处只提前过期活动时间验证交互保护；真实三秒由另一项完整等待。
+                Set("_seeking", true);
+                Set("_lastControlActivity", DateTime.UtcNow.AddSeconds(-4));
+                Invoke("UpdateFullscreenControls");
+                Require(popup.IsOpen, "拖动进度时自动隐藏控制栏");
+                Set("_seeking", false);
+                Invoke("HandlePlayerPointerActivity", center);
+                Require(!Field<bool>("_controlsKeyboardInteraction"), "指针交互没有解除键盘保护状态");
+                RaiseKey(Window, Key.Tab);
+                Require(Field<bool>("_controlsKeyboardInteraction"), "从窗口首次按Tab未记录键盘交互");
+                FrameworkElement focusTarget = Control<FrameworkElement>("FullscreenButton");
+                Keyboard.Focus(focusTarget);
+                await Settle();
+                Require(focusTarget.IsKeyboardFocusWithin, "键盘焦点未进入主控制栏");
+                Set("_lastControlActivity", DateTime.UtcNow.AddSeconds(-4));
+                Invoke("UpdateFullscreenControls");
+                Require(popup.IsOpen, "从窗口首次Tab进入主栏后自动隐藏控件");
+                Keyboard.ClearFocus();
+                Invoke("HandlePlayerPointerActivity", center);
+                RaiseVideoActivity();
+                Require(Field<bool>("_controlsKeyboardInteraction"), "原生键盘活动未记录键盘交互");
+                Keyboard.Focus(focusTarget);
+                await Settle();
+                Require(focusTarget.IsKeyboardFocusWithin, "原生键盘活动后的焦点未进入主栏");
+                Set("_lastControlActivity", DateTime.UtcNow.AddSeconds(-4));
+                Invoke("UpdateFullscreenControls");
+                Require(popup.IsOpen, "原生键盘首次进入主栏后自动隐藏控件");
+                Keyboard.ClearFocus();
+                Click("PlaybackOptionsButton");
+                await Settle();
+                Require(Field<Popup?>("_playbackOptionsPopup")?.IsOpen == true, "交互保护检查未打开设置");
+                Set("_lastControlActivity", DateTime.UtcNow.AddSeconds(-4));
+                Invoke("UpdateFullscreenControls");
+                Require(popup.IsOpen, "设置打开时自动隐藏控制栏");
+                Invoke("ClosePlaybackOptions");
+                await Wait(() => Field<Popup?>("_playbackOptionsPopup") == null, 3000);
+                Keyboard.ClearFocus();
+                Invoke("HandlePlayerPointerActivity", center);
+                RequireNear(initialVideo, ScreenBounds(Control<FrameworkElement>("VideoBorder")), "局部唤醒或设置改变视频尺寸");
+                return new { centerMovementRevealsCursorOnly = true, bottomMovementOpensControls = true, topMovementOpensControls = true,
+                    nativeKeyboardOpensControls = true, seekingProtected = true, firstWindowTabProtected = true,
+                    firstNativeKeyboardFocusProtected = true, keyboardFocusProtected = true,
+                    settingsProtected = true, stableVideoRect = true, actualSystemInput = false };
             });
 
             await Check("minimized_hidden_and_restored_windows_keep_overlay_scoped", async () =>
             {
-                Require(Window.Activate(), "最小化检查前激活请求失败");
-                await Wait(() => Window.IsActive, 3000);
+                await ActivateOwnWindow(Window, other);
                 Popup popup = Field<Popup>("_fullscreenControls");
-                Require(popup.IsOpen, "激活窗口未显示控制浮层");
+                // 上一项可能保持窗口激活但收起浮层，显式建立本项的已打开前置状态。
+                Invoke("RevealFullscreenControls");
+                Require(popup.IsOpen, "最小化检查前未唤醒控制浮层");
                 Window.WindowState = WindowState.Minimized;
                 await Settle();
                 Require(!popup.IsOpen && Window.Cursor != Cursors.None, "最小化后仍保留控制浮层或隐藏鼠标");
@@ -520,16 +1003,16 @@ internal static class Program
                 Invoke("RevealFullscreenControls");
                 Require(!popup.IsOpen, "最小化窗口活动重开控制浮层");
                 Window.WindowState = WindowState.Normal;
-                Require(Window.Activate(), "窗口还原后激活请求失败");
-                await Wait(() => Window.IsActive && popup.IsOpen, 3000);
+                await ActivateOwnWindow(Window);
+                await WaitForRestoredOverlay(popup, "minimized_to_normal");
                 Window.Hide();
                 await Settle();
                 RaiseVideoActivity();
                 Invoke("RevealFullscreenControls");
                 Require(!Window.IsVisible && !popup.IsOpen && Window.Cursor != Cursors.None, "隐藏窗口仍显示浮层或隐藏鼠标");
                 Window.Show();
-                Require(Window.Activate(), "隐藏窗口恢复后激活请求失败");
-                await Wait(() => Window.IsActive && popup.IsOpen, 3000);
+                await ActivateOwnWindow(Window);
+                await WaitForRestoredOverlay(popup, "hidden_to_visible");
                 Click("FullscreenButton");
                 await Settle();
                 VerifyNormalLayout();
@@ -545,12 +1028,43 @@ internal static class Program
             Window.Hide();
             other.Close();
             Window.WindowState = WindowState.Normal;
-            Window.Left = -3000;
+            Window.Left = VisibleForeground ? 40 : -3000;
             Window.Top = 20;
             Window.Show();
             controls.IsHitTestVisible = hitTestVisible;
             Control<FrameworkElement>("VideoHost").Visibility = videoVisibility;
             await Settle();
+        }
+    }
+
+    private static object ForegroundDiagnostic()
+    {
+        IntPtr main = new WindowInteropHelper(Window).Handle;
+        IntPtr foreground = GetForegroundWindow();
+        return new { main = main.ToInt64(), foreground = foreground.ToInt64(), rootOwner = GetAncestor(foreground, 3).ToInt64(),
+            active = Window.IsActive, visible = Window.IsVisible, state = Window.WindowState.ToString(),
+            productionForeground = Invoke("HasPlaybackForeground"), optionsRegistered = Field<Popup?>("_playbackOptionsPopup") != null,
+            optionsOpen = Field<Popup?>("_playbackOptionsPopup")?.IsOpen,
+            cinema = Field<bool>("_windowCinema"), fullscreen = Field<bool>("_fullscreen"), controlsOpen = Field<Popup?>("_fullscreenControls")?.IsOpen };
+    }
+
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    private static async Task WaitForRestoredOverlay(Popup popup, string phase)
+    {
+        try { await Wait(() => Window.IsActive && popup.IsOpen, 3000); }
+        catch (TimeoutException error)
+        {
+            throw new InvalidOperationException("浮层恢复超时：" + JsonSerializer.Serialize(new
+            {
+                phase, active = Window.IsActive, visible = Window.IsVisible, state = Window.WindowState.ToString(),
+                popupOpen = popup.IsOpen, currentPopupMatches = ReferenceEquals(popup, Field<Popup?>("_fullscreenControls")),
+                cinema = Field<bool>("_windowCinema"), fullscreen = Field<bool>("_fullscreen"),
+                controlsVisible = Control<FrameworkElement>("PlayerControls").IsVisible,
+                timerEnabled = Field<DispatcherTimer>("_fullscreenTimer").IsEnabled
+            }), error);
         }
     }
 
@@ -562,6 +1076,14 @@ internal static class Program
         activity(host, EventArgs.Empty);
     }
 
+    private static void RaiseVideoPointerActivity(Point screenPosition)
+    {
+        NativeVideoHost host = Control<NativeVideoHost>("VideoHost");
+        var activity = (EventHandler<Point>)typeof(NativeVideoHost).GetField("PointerActivity", Private)!.GetValue(host)!;
+        // 坐标经过真实生产订阅链换算，覆盖原生窗口与 WPF 的 DPI 坐标边界。
+        activity(host, screenPosition);
+    }
+
     private static async Task ResetNormal(double width, double height)
     {
         if (Field<bool>("_fullscreen")) Invoke("ToggleFullscreen");
@@ -569,7 +1091,7 @@ internal static class Program
         Window.WindowState = WindowState.Normal;
         Window.Width = width;
         Window.Height = height;
-        Window.Left = -3000;
+        Window.Left = VisibleForeground ? 40 : -3000;
         Window.Top = 20;
         PositioningFixture = false;
         Control<FrameworkElement>("VideoHost").Visibility = Visibility.Visible;
@@ -592,7 +1114,9 @@ internal static class Program
         Require(Control<ColumnDefinition>("EpisodeColumn").ActualWidth < 1 && !Control<FrameworkElement>("EpisodeSidebar").IsVisible, "影院侧栏仍占空间");
         Rect viewport = ScreenBounds(Control<FrameworkElement>("ShellViewport"));
         Rect video = ScreenBounds(Control<FrameworkElement>("VideoBorder"));
-        RequireNear(viewport, video, "视频未填满当前窗口客户区");
+        double reservedHeight = Control<RowDefinition>("PlaybackControlsRow").ActualHeight;
+        Require(reservedHeight < 1, "沉浸播放仍预留底部空带");
+        RequireNear(viewport, video, "沉浸视频没有填满当前客户区");
         ScrollViewer shell = Control<ScrollViewer>("ShellViewport");
         Require(shell.ScrollableWidth < 1 && shell.ScrollableHeight < 1, "影院保留整窗滚动");
         Require(Field<Popup?>("_fullscreenControls")?.Child == Control<FrameworkElement>("PlayerControls"), "影院控制未移到浮层");
@@ -614,9 +1138,16 @@ internal static class Program
             Control<FrameworkElement>("PlayerControls").UpdateLayout();
             Rect root = ScreenBounds(Control<FrameworkElement>("RootLayout"));
             Rect controls = ScreenBounds(Control<FrameworkElement>("PlayerControls"));
-            Require(Math.Abs(root.Left - controls.Left) <= 3 && Math.Abs(root.Right - controls.Right) <= 3 && Math.Abs(root.Bottom - controls.Bottom) <= 3,
-                "控制浮层没有跟随窗口底部：" + root + " / " + controls);
-            return new { root = root.ToString(CultureInfo.InvariantCulture), controls = controls.ToString(CultureInfo.InvariantCulture), aligned = true,
+            Rect video = ScreenBounds(Control<FrameworkElement>("VideoBorder"));
+            double dpiY = VisualTreeHelper.GetDpi(Control<FrameworkElement>("RootLayout")).DpiScaleY;
+            Require(Math.Abs((root.Left + root.Right) / 2 - (controls.Left + controls.Right) / 2) <= 3
+                && Math.Abs(controls.Top - root.Top - 12 * dpiY) <= 3,
+                "顶部浮条没有随窗口居中定位：" + root + " / " + controls);
+            RequireContains(root, controls, "顶部浮条越过窗口客户区");
+            Rect captionRegion = new(video.Left, video.Top + video.Height * 0.7, video.Width, video.Height * 0.3);
+            Require(!controls.IntersectsWith(captionRegion), "主控制浮条进入底部字幕区域：" + video + " / " + controls);
+            return new { root = root.ToString(CultureInfo.InvariantCulture), controls = controls.ToString(CultureInfo.InvariantCulture), video = video.ToString(CultureInfo.InvariantCulture), aligned = true,
+                centeredAtTop = true, bottomCaptionRegionUncovered = true,
                 explicitlyOpenedInvisiblePositioningFixture = true };
         }
         finally
@@ -632,12 +1163,13 @@ internal static class Program
         Require(popup.Child == Control<FrameworkElement>("PlayerControls"), "影院浮层未承载播放控制");
         if (!Window.IsActive || !Window.IsVisible || Window.WindowState == WindowState.Minimized)
             Require(!popup.IsOpen, "后台或不可见夹具仍打开生产浮层");
-        Require(Math.Abs(popup.Width - Control<FrameworkElement>("RootLayout").ActualWidth) <= 1, "影院浮层宽度与当前客户区不符");
+        double expectedWidth = Math.Min(860, Math.Max(1, Control<FrameworkElement>("RootLayout").ActualWidth - 32));
+        Require(Math.Abs(popup.Width - expectedWidth) <= 1, "紧凑浮条宽度与当前客户区不符");
         return new { visible = popup.IsOpen, active = Window.IsActive, widthFollowsWindow = true,
             coordinateCheck = "工作区内定位专项显式暂开不可见Popup，后台生产浮层保持关闭" };
     }
 
-    private static async Task<object> VerifyNativeVideo()
+    private static async Task<object> VerifyNativeVideo(int expectedWidth = 360, int expectedHeight = 640)
     {
         await Settle();
         NativeVideoHost host = Control<NativeVideoHost>("VideoHost");
@@ -647,14 +1179,23 @@ internal static class Program
         Require(native.Width > 1 && native.Height > 1, "原生视频客户区为空");
         RequireContains(video, native, "原生画面越过播放区");
         RequireContains(shell, native, "原生画面越过窗口客户区");
+        double reservedHeight = Control<RowDefinition>("PlaybackControlsRow").ActualHeight;
+        Point controlOrigin = Control<Grid>("CinemaLayout").PointToScreen(new Point(0,
+            Control<Grid>("CinemaLayout").ActualHeight - reservedHeight));
+        Require(native.Bottom <= controlOrigin.Y + 2, "真实原生视频越过布局底边");
+        bool immersive = Field<bool>("_fullscreen") || Field<bool>("_windowCinema");
+        if (immersive)
+            Require(Math.Abs(native.Bottom - video.Bottom) <= 2 && reservedHeight < 1, "真实原生视频底部仍有额外预留空带");
         await Wait(() => Math.Abs(ReadNumber("osd-dimensions/w") - native.Width) <= 2 && Math.Abs(ReadNumber("osd-dimensions/h") - native.Height) <= 2, 3000);
         double w = ReadNumber("osd-dimensions/w"), h = ReadNumber("osd-dimensions/h");
         double ml = ReadNumber("osd-dimensions/ml"), mr = ReadNumber("osd-dimensions/mr"), mt = ReadNumber("osd-dimensions/mt"), mb = ReadNumber("osd-dimensions/mb");
         double dw = ReadNumber("dwidth"), dh = ReadNumber("dheight");
         Require(ReadString("keepaspect") == "yes" && ReadNumber("panscan") == 0, "视频不再保持原始比例");
         Require(Math.Abs((w - ml - mr) - (h - mt - mb) * dw / dh) <= 2, "实际显示画面比例与源视频不符");
-        Require(Player.GetStatus().FrameReady && dw == 360 && dh == 640, "真实媒体不再解码就绪");
-        return new { client = native.ToString(CultureInfo.InvariantCulture), osd = new[] { w, h }, blackBars = new[] { ml, mr, mt, mb }, decodedDisplay = new[] { dw, dh }, sourceAspectPreserved = true };
+        Require(Player.GetStatus().FrameReady && dw == expectedWidth && dh == expectedHeight, "真实媒体不再解码就绪");
+        return new { client = native.ToString(CultureInfo.InvariantCulture), osd = new[] { w, h }, blackBars = new[] { ml, mr, mt, mb }, decodedDisplay = new[] { dw, dh },
+            layoutBottom = controlOrigin.Y, reservedControlHeight = reservedHeight, sourceAspectPreserved = true,
+            immersiveWithoutBottomBand = immersive };
     }
 
     private sealed record WindowSnapshot(double Left, double Top, double Width, double Height, double ActualWidth, double ActualHeight, string State, string Style, string ResizeMode, string Client, string Outer);
@@ -682,6 +1223,26 @@ internal static class Program
         Control<Button>(name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         if (name == "PlaybackOptionsButton" && Field<Popup?>("_playbackOptionsPopup")?.Child is FrameworkElement panel) panel.Opacity = 0;
         if (!PositioningFixture && !Field<bool>("_fullscreen")) Control<FrameworkElement>("VideoHost").Visibility = Visibility.Visible;
+    }
+    private static void ClickMenu(string name)
+    {
+        MenuControl<Button>(name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        if (Field<Popup?>("_playbackOptionsPopup")?.Child is FrameworkElement panel) panel.Opacity = 0;
+    }
+    private static T MenuControl<T>(string name) where T : FrameworkElement
+    {
+        DependencyObject root = Field<Popup>("_playbackOptionsPopup").Child;
+        return FindNamedDescendant<T>(root, name) ?? throw new InvalidOperationException("菜单控件未找到：" + name);
+    }
+    private static T? FindNamedDescendant<T>(DependencyObject root, string name) where T : FrameworkElement
+    {
+        if (root is T element && (element.Name == name || System.Windows.Automation.AutomationProperties.GetAutomationId(element) == name)) return element;
+        for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            T? found = FindNamedDescendant<T>(VisualTreeHelper.GetChild(root, index), name);
+            if (found != null) return found;
+        }
+        return null;
     }
     private static void RaiseKey(FrameworkElement element, Key key)
     {
@@ -716,15 +1277,38 @@ internal static class Program
             await Task.Delay(20);
         }
     }
+    private static async Task ActivateOwnWindow(System.Windows.Window target, System.Windows.Window? inactive = null)
+    {
+        bool requestAccepted = target.Activate();
+        IntPtr handle = new WindowInteropHelper(target).Handle;
+        bool foregroundAccepted = SetForegroundWindow(handle);
+        try
+        {
+            // WPF 激活不代表系统前台已交接，必须同时匹配真实根 owner。
+            await Wait(() => target.IsActive && GetAncestor(GetForegroundWindow(), 3) == handle
+                && (inactive == null || !inactive.IsActive), 3000);
+        }
+        catch (TimeoutException error)
+        {
+            throw new InvalidOperationException("自有窗口激活状态等待超时：" + JsonSerializer.Serialize(new
+            {
+                requestAccepted, foregroundAccepted, expected = handle.ToInt64(),
+                foreground = GetForegroundWindow().ToInt64(), rootOwner = GetAncestor(GetForegroundWindow(), 3).ToInt64(),
+                targetActive = target.IsActive, targetVisible = target.IsVisible,
+                targetState = target.WindowState.ToString(), inactiveActive = inactive?.IsActive,
+                mainActive = Window.IsActive, mainVisible = Window.IsVisible,
+                controlsOpen = Field<Popup?>("_fullscreenControls")?.IsOpen,
+                optionsOpen = Field<Popup?>("_playbackOptionsPopup")?.IsOpen
+            }), error);
+        }
+    }
     private static RenderTargetBitmap Capture(FrameworkElement element, string path)
     {
-        Popup? overlay = Field<Popup?>("_fullscreenControls");
-        bool opened = overlay?.IsOpen == true;
-        if (opened) overlay!.IsOpen = false;
         double opacity = element.Opacity;
         try
         {
-            // 控制层临时不透明只用于离屏渲染，Popup已经关闭且不向桌面合成可见内容。
+            // 同步临时恢复透明度只用于离屏绘制，返回Dispatcher前恢复夹具状态。
+            // 保持Popup开启可保留真实布局与绑定，避免关闭后导出空白PNG。
             element.Opacity = 1;
             var bitmap = new RenderTargetBitmap(Math.Max(1, (int)Math.Ceiling(element.ActualWidth)), Math.Max(1, (int)Math.Ceiling(element.ActualHeight)), 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(element);
@@ -737,13 +1321,22 @@ internal static class Program
         finally
         {
             element.Opacity = opacity;
-            if (opened) overlay!.IsOpen = true;
         }
+    }
+    private static void CaptureMenu(string path)
+    {
+        RenderTargetBitmap bitmap = Capture((FrameworkElement)Field<Popup>("_playbackOptionsPopup").Child, path);
+        byte[] pixels = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
+        bitmap.CopyPixels(pixels, bitmap.PixelWidth * 4, 0);
+        int painted = 0;
+        for (int offset = 3; offset < pixels.Length; offset += 4)
+            if (pixels[offset] > 0) painted++;
+        Require(painted > 100, "菜单PNG未实际渲染：" + path);
     }
     private static async Task Check(string name, Func<Task<object>> test)
     {
         try { Record(name, true, await test()); }
-        catch (Exception error) { Record(name, false, new { type = error.GetType().Name, error = error.Message }); }
+        catch (Exception error) { Record(name, false, new { type = error.GetType().Name, error = error.Message, foreground = ForegroundDiagnostic() }); }
     }
     private static void Record(string name, bool passed, object detail) { if (!passed) Failures++; Tests.Add(new { name, passed, detail }); Console.WriteLine((passed ? "PASS " : "FAIL ") + name + " " + JsonSerializer.Serialize(detail)); }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

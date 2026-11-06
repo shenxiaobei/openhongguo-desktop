@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace Hongguo.Desktop;
 
-// 使用原生子窗口承载视频；普通控制条位于下方，全屏控制条使用独立 Popup 覆盖。
+// 使用原生子窗口承载视频；普通控制栏在画面外，沉浸控制栏使用归属主窗口的浮层。
 public sealed class NativeVideoHost : WindowsFormsHost
 {
     private readonly Panel _container;
@@ -25,6 +25,7 @@ public sealed class NativeVideoHost : WindowsFormsHost
     public event EventHandler<int>? RecommendationScrollRequested;
     public event EventHandler<int>? SeekRequested;
     public event EventHandler? UserActivity;
+    public event EventHandler<System.Windows.Point>? PointerActivity;
 
     public NativeVideoHost()
     {
@@ -110,13 +111,19 @@ public sealed class NativeVideoHost : WindowsFormsHost
     private Panel CreateVideoPanel()
     {
         var panel = new VideoPanel { BackColor = System.Drawing.Color.Black, Dock = DockStyle.Fill };
-        panel.MouseDown += (_, _) => { panel.Focus(); UserActivity?.Invoke(this, EventArgs.Empty); };
+        panel.MouseDown += (_, args) =>
+        {
+            panel.Focus();
+            System.Drawing.Point screen = panel.PointToScreen(args.Location);
+            PointerActivity?.Invoke(this, new System.Windows.Point(screen.X, screen.Y));
+        };
         System.Drawing.Point lastPointer = new(-1, -1);
         panel.MouseMove += (_, args) =>
         {
             if (lastPointer == args.Location) return;
             lastPointer = args.Location;
-            UserActivity?.Invoke(this, EventArgs.Empty);
+            System.Drawing.Point screen = panel.PointToScreen(args.Location);
+            PointerActivity?.Invoke(this, new System.Windows.Point(screen.X, screen.Y));
         };
         panel.DoubleClick += (_, _) => ToggleFullscreenRequested?.Invoke(this, EventArgs.Empty);
         panel.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) TogglePauseRequested?.Invoke(this, EventArgs.Empty); };

@@ -80,6 +80,7 @@ public partial class MainWindow : Window
     private double _duration;
     private double _speed = 1;
     private DateTime _lastHistorySave = DateTime.MinValue;
+    private Task _historySaveTask = Task.CompletedTask;
     private DateTime _lastFeedSwitch = DateTime.MinValue;
     private WindowState _previousWindowState;
     private bool IsImmersivePlayback => _fullscreen || _windowCinema;
@@ -115,6 +116,7 @@ public partial class MainWindow : Window
             if (_feedMode) await MoveRecommendationAsync(direction);
         };
         InitializePresentation();
+        InitializeSearchSuggestions();
         AutoNextCheck.Unchecked += (_, _) => CancelNextPlayback();
         AutoNextCheck.Checked += (_, _) => PrepareNextPlayback(true);
     }
@@ -152,6 +154,7 @@ public partial class MainWindow : Window
     private MpvPlayer CreatePlayer(IntPtr handle)
     {
         var player = new MpvPlayer(handle);
+        player.SetFillWindow(_fillVideoWindow);
         player.Ended += async (sender, _) =>
         {
             if (ReferenceEquals(sender, _player)) await PlaybackEndedAsync();
@@ -438,6 +441,7 @@ public partial class MainWindow : Window
 
     private Task PlayEpisodeAsync(EpisodeItem episode, bool resume = false)
     {
+        ClosePlaybackOptions();
         if (_currentEpisode?.Id != episode.Id)
         {
             _quality = "best";
@@ -450,6 +454,7 @@ public partial class MainWindow : Window
     private async Task PlayEpisodeCoreAsync(EpisodeItem episode, bool resume, double? startOverride, bool paused)
     {
         if (_backend == null || _currentSeries == null || !episode.Playable || _closing) return;
+        ClosePlaybackOptions();
         _lastPlaybackFailure = null;
         string requestedQuality = _quality;
         if (_nextPlaybackEpisodeId != episode.Id || _nextPlaybackQuality != requestedQuality) CancelNextPlayback();
@@ -480,7 +485,7 @@ public partial class MainWindow : Window
         ClearError();
         try
         {
-            if (bufferedPlayback == null) await saved;
+            // 先加载媒体，旧集历史在首帧交接后按顺序等候，不让历史写入拖慢手动切集。
             if (token.IsCancellationRequested || version != _playVersion || _closing) return;
             PlaybackInfo? prepared = bufferedPlayback ?? await TakePreparedPlaybackAsync(episode.Id, requestedQuality, token);
             PlaybackInfo playback = prepared ?? ModelJson.Parse<PlaybackInfo>(await _backend.CallAsync("playback", new { episode_id = episode.Id, quality = requestedQuality }, token));
@@ -612,9 +617,10 @@ public partial class MainWindow : Window
         return saved;
     }
 
-    private async Task SaveHistoryAsync(bool finished)
+    private Task SaveHistoryAsync(bool finished)
     {
-        if (_backend == null || _currentSeries == null || _currentEpisode == null) return;
+        // 导航会先清空当前剧集，关闭时仍需等待此前排入的记录写完。
+        if (_backend == null || _currentSeries == null || _currentEpisode == null) return _historySaveTask;
         SeriesItem series = _currentSeries;
         EpisodeItem episode = _currentEpisode;
         finished |= _episodeCompleted;
@@ -627,15 +633,32 @@ public partial class MainWindow : Window
                 if (status.Loaded && status.Position >= 0) position = status.Position;
             }
             if (finished) position = Math.Max(position, _duration);
-            await _backend.CallAsync("history_record", new
+            // 在排队前捕获完整快照，后续切集不再改变这条记录。
+            var record = new
             {
                 series_id = series.Id, title = series.Title, episode = episode.Number,
                 episodes = Math.Max(series.EpisodeCount, _episodes.Count), finished, position = Math.Max(0, position)
-            });
+            };
+            _historySaveTask = SaveHistoryInOrderAsync(_historySaveTask, _backend, record);
         }
         catch
         {
             // 记录写入失败不打断正在播放的视频，用户仍可继续观看。
+        }
+        return _historySaveTask;
+    }
+
+    private static async Task SaveHistoryInOrderAsync(Task previous, BackendClient backend, object record)
+    {
+        try
+        {
+            // 只串行化历史写入；媒体请求继续并行，避免旧响应晚到后覆盖新进度。
+            await previous;
+            await backend.CallAsync("history_record", record);
+        }
+        catch
+        {
+            // 单条记录失败后仍完成队列任务，让后续记录与关闭清理继续执行。
         }
     }
 
@@ -1030,6 +1053,7 @@ public partial class MainWindow : Window
         RestoreWindowControls();
         if (!_fullscreen)
         {
+            SetVideoFillMode(false);
             // 屏幕全屏保留进入前的窗口内模式，退出后按原状态继续观看。
             _fullscreen = true;
             _previousWindowState = WindowState;
@@ -1037,6 +1061,7 @@ public partial class MainWindow : Window
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.NoResize;
             WindowState = WindowState.Maximized;
+            UpdateCaptionIcon();
             ApplyShellLayout();
             RootLayout.UpdateLayout();
             MoveControlsToFullscreen();
@@ -1048,6 +1073,7 @@ public partial class MainWindow : Window
             WindowStyle = WindowStyle.SingleBorderWindow;
             ResizeMode = ResizeMode.CanResize;
             WindowState = _previousWindowState;
+            UpdateCaptionIcon();
             ApplyShellLayout();
             if (_windowCinema)
             {
@@ -1068,6 +1094,7 @@ public partial class MainWindow : Window
         CloseEpisodePicker();
         RestoreWindowControls();
         // 只改变客户区的播放布局，窗口位置、尺寸、标题栏和最大化状态保持原值。
+        if (!_windowCinema) SetVideoFillMode(false);
         _windowCinema = !_windowCinema;
         ApplyShellLayout();
         if (_windowCinema)
@@ -1121,13 +1148,14 @@ public partial class MainWindow : Window
     }
     private async void SearchInput_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter) return;
+        if (_searchComposition || e.Key != Key.Enter) return;
         e.Handled = true;
         await SearchAsync();
     }
 
     private async Task SearchAsync()
     {
+        CloseSearchSuggestions();
         Task stopped = StopCurrentAsync();
         _feedMode = false;
         _query = SearchInput.Text.Trim();
@@ -1252,7 +1280,14 @@ public partial class MainWindow : Window
 
     private async void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        _controlsKeyboardInteraction = true;
         RevealFullscreenControls();
+        if (e.Key == Key.Escape && _playbackOptionsPopup?.IsOpen == true)
+        {
+            ClosePlaybackOptions();
+            e.Handled = true;
+            return;
+        }
         if (e.Key == Key.F11)
         {
             ToggleFullscreen();
@@ -1266,6 +1301,7 @@ public partial class MainWindow : Window
             return;
         }
         if (e.OriginalSource is TextBoxBase || e.OriginalSource is ComboBoxItem || e.OriginalSource is Slider) return;
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.ButtonBase && e.Key is Key.Space or Key.Enter) return;
         if (SpeedCombo.IsKeyboardFocusWithin || QualityCombo.IsKeyboardFocusWithin || SearchTabCombo.IsKeyboardFocusWithin || RankContentCombo.IsKeyboardFocusWithin || RankBoardCombo.IsKeyboardFocusWithin) return;
         if (PlayerScreen.Visibility != Visibility.Visible) return;
         if (e.Key == Key.Space) { TogglePause(); e.Handled = true; }
@@ -1283,7 +1319,7 @@ public partial class MainWindow : Window
 
     private void About_Click(object sender, RoutedEventArgs e)
     {
-        System.Windows.MessageBox.Show("红果原生桌面版 0.3.7\n\n原生 Windows 窗口与内嵌视频播放器。\n提供逐行榜单、题材筛选、真实互动计数、画质切换、倍速、观看记录及连续推荐。\n下一集提前加载实际媒体并准备首帧，同系列支持跨季连播。\n\n右下角为窗口内全屏，保留当前窗口大小。\nF11 或双击视频进入屏幕全屏，Esc 逐级退出。\n快捷键：空格暂停，左右快进/后退 5 秒。\n沉浸播放的透明控制栏静止 3 秒连同鼠标隐藏，移动鼠标重新显示。\n连续推荐模式：在视频区滚轮或 ↑ / ↓ 切换剧集。\n\n本地数据：" + _configDir, "应用信息", MessageBoxButton.OK, MessageBoxImage.Information);
+        System.Windows.MessageBox.Show("红果原生桌面版 1.0\n\n原生 Windows 窗口与内嵌视频播放器。\n提供逐行榜单、题材筛选、真实互动计数、画质切换、倍速、观看记录及连续推荐。\n下一集提前加载实际媒体并准备首帧，同系列支持跨季连播。\n\n右下角为窗口内全屏，保留当前窗口大小。\nF11 或双击视频进入屏幕全屏，Esc 逐级退出。\n快捷键：空格暂停，左右快进/后退 5 秒。\n沉浸播放使用顶部短浮条，静止约 3 秒隐藏控件与鼠标。\n鼠标靠近上下边缘展开操作栏；中央移动只恢复指针。\n倍速、画质、音量和自动连播放入齿轮设置。\n连续推荐模式：在视频区滚轮或 ↑ / ↓ 切换剧集。\n\n本地数据：" + _configDir, "应用信息", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private async void Window_Closing(object? sender, CancelEventArgs e)

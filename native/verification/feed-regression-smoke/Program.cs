@@ -35,6 +35,8 @@ internal static class Program
         "recommend_failure_preserves_home_and_error_code", "candidate_failure_from_player_shows_consistent_failure_view",
         "recommend_request_error_preserves_existing_player", "catalog_fallback_source_label_is_visible",
         "unavailable_candidates_are_bounded", "retry_after_bound_continues_untried_local_queue",
+        "manual_next_decodes_before_delayed_history_reply", "quality_switch_keeps_pause_and_position_before_delayed_history_reply",
+        "rapid_next_history_writes_remain_ordered", "close_after_navigation_waits_for_queued_history",
         "season_natural_eof_uses_real_adjacent_id_before_feed", "season_auto_next_off_then_on", "season-unreleased",
         "season-unavailable-episode", "season_error_stops_without_unrelated_recommendation", "season_old_response_ignored_after_navigation",
         "season_switch_cancels_old_series_response", "season_rejects_mismatched_series", "season_rejects_mismatched_album", "season_rejects_mismatched_index", "season_rejects_mismatched_current_index"
@@ -103,6 +105,105 @@ internal static class Program
 
     private static async Task RunAsync()
     {
+        await Check("rapid_next_history_writes_remain_ordered", async () =>
+        {
+            using var fixture = new Fixture("history-order-delay");
+            await Call("OpenSeriesAsync", "4001", true, 0);
+            await WaitAsync(() => Field<MpvPlayer?>("_player")?.GetStatus().FrameReady == true, "first episode did not decode");
+            Field<MpvPlayer>("_player").SetPaused(true);
+            await BackendCall("fixture_hold_history");
+            EpisodeItem second = Field<IEnumerable<EpisodeItem>>("_episodes").Single(item => item.Number == 2);
+            EpisodeItem third = Field<IEnumerable<EpisodeItem>>("_episodes").Single(item => item.Number == 3);
+            Task switchingSecond = Call("PlayEpisodeAsync", second, false);
+            Task switchingThird = Task.CompletedTask;
+            bool secondDecoded = false, thirdDecoded = false;
+            JsonElement held;
+            try
+            {
+                await BackendCall("fixture_wait_history");
+                await WaitAsync(() => Field<MpvPlayer?>("_player")?.GetStatus().FrameReady == true, "second episode waited for old history");
+                secondDecoded = true;
+                Field<MpvPlayer>("_player").SetPaused(true);
+                switchingThird = Call("PlayEpisodeAsync", third, false);
+                await WaitAsync(() => Field<MpvPlayer?>("_player")?.GetStatus().FrameReady == true, "third episode waited for old history");
+                thirdDecoded = true;
+                Field<MpvPlayer>("_player").SetPaused(true);
+                await Task.Delay(150);
+                held = await BackendCall("fixture_stats");
+                Require(!held.GetProperty("historyReleased").GetBoolean(), "history was not held across both switches");
+            }
+            finally
+            {
+                await BackendCall("fixture_release_history");
+                await Task.WhenAll(switchingSecond, switchingThird).WaitAsync(TimeSpan.FromSeconds(12));
+            }
+            JsonElement completed = await BackendCall("fixture_stats");
+            int[] historyEpisodes = completed.GetProperty("historyEpisodes").EnumerateArray().Select(item => item.GetInt32()).ToArray();
+            int[] heldEpisodes = held.GetProperty("historyEpisodes").EnumerateArray().Select(item => item.GetInt32()).ToArray();
+            Require(historyEpisodes.LastOrDefault() == 3,
+                $"late old history overwrote current episode: held=[{string.Join(',', heldEpisodes)}], final=[{string.Join(',', historyEpisodes)}]");
+            Require(secondDecoded && thirdDecoded && Field<EpisodeItem>("_currentEpisode").Number == 3, "rapid next lost current playback");
+            return new { secondDecodedBeforeHistoryReply = secondDecoded, thirdDecodedBeforeHistoryReply = thirdDecoded, heldEpisodes, historyEpisodes, latestEpisode = 3 };
+        });
+        await Check("close_after_navigation_waits_for_queued_history", async () =>
+        {
+            using var fixture = new Fixture("history-order-delay");
+            await Call("OpenSeriesAsync", "4001", true, 0);
+            await WaitAsync(() => Field<MpvPlayer?>("_player")?.GetStatus().FrameReady == true, "close fixture did not decode");
+            Field<MpvPlayer>("_player").SetPaused(true);
+            await BackendCall("fixture_hold_history");
+            Task stopping = Call("StopCurrentAsync");
+            await BackendCall("fixture_wait_history");
+            Require(Field<EpisodeItem?>("_currentEpisode") == null, "navigation did not clear episode");
+            // 关闭后的后台已经销毁，使用夹具自己的延时释放和文件证据验证排空。
+            await BackendCall("fixture_release_history_after", new { milliseconds = 800 });
+            Window.Close();
+            await Task.Delay(200);
+            bool remainedOpenUntilHistoryReleased = !fixture.Closed;
+            await WaitAsync(() => fixture.Closed, "window did not close after history release");
+            await stopping.WaitAsync(TimeSpan.FromSeconds(5));
+            string[] history = File.ReadAllLines(Path.Combine(fixture.DirectoryPath, "history-episodes.txt"));
+            Require(remainedOpenUntilHistoryReleased && history.SequenceEqual(new[] { "1", "1" }),
+                $"close discarded queued history: waited={remainedOpenUntilHistoryReleased}, persisted=[{string.Join(',', history)}]");
+            return new { naturallyClosed = true, remainedOpenUntilHistoryReleased, persistedEpisodes = history };
+        });
+        await Check("manual_next_decodes_before_delayed_history_reply", async () =>
+        {
+            using var fixture = new Fixture("manual-history-delay");
+            await Call("OpenSeriesAsync", "4001", true, 0);
+            await WaitAsync(() => Field<MpvPlayer?>("_player")?.GetStatus().FrameReady == true, "first episode did not decode");
+            Field<MpvPlayer>("_player").SetPaused(true);
+            EpisodeItem next = Field<IEnumerable<EpisodeItem>>("_episodes").Single(item => item.Number == 2);
+            var probe = await SwitchWithDelayedHistoryAsync(() => Call("PlayEpisodeAsync", next, false));
+            bool playbackRequestedBeforeHistoryReply = probe.Stats.GetProperty("playbackEpisodes").EnumerateArray()
+                .Any(item => item.GetString() == next.Id);
+            await WaitAsync(() => Field<MpvPlayer?>("_player")?.GetStatus().FrameReady == true, "next episode did not decode after releasing history");
+            Field<MpvPlayer>("_player").SetPaused(true);
+            JsonElement completed = await BackendCall("fixture_stats");
+            int[] historyEpisodes = completed.GetProperty("historyEpisodes").EnumerateArray().Select(item => item.GetInt32()).ToArray();
+            Require(historyEpisodes.Contains(1) && historyEpisodes.Contains(2), "switching lost the old or new episode history");
+            Require(probe.Status.FrameReady && playbackRequestedBeforeHistoryReply,
+                $"manual next waited for history reply: requested={playbackRequestedBeforeHistoryReply}, decoded={probe.Status.FrameReady}, probeMs={probe.ElapsedMs}");
+            return new { decodedBeforeHistoryReply = probe.Status.FrameReady, playbackRequestedBeforeHistoryReply, historyEpisodes, probe.ElapsedMs, standbyDisabled = true };
+        });
+        await Check("quality_switch_keeps_pause_and_position_before_delayed_history_reply", async () =>
+        {
+            using var fixture = new Fixture("manual-history-delay");
+            await Call("OpenSeriesAsync", "4001", true, 0);
+            await WaitAsync(() => Field<MpvPlayer?>("_player")?.GetStatus().FrameReady == true, "quality fixture did not decode");
+            MpvPlayer player = Field<MpvPlayer>("_player");
+            player.SetPaused(true);
+            player.Seek(2);
+            await WaitAsync(() => player.GetStatus().Paused && Math.Abs(player.GetStatus().Position - 2) < 0.15, "paused seek did not settle");
+            var probe = await SwitchWithDelayedHistoryAsync(() => Call("ChangeQualityAsync", "worst"));
+            bool requestedQuality = probe.Stats.GetProperty("playbackQualities").EnumerateArray().Any(item => item.GetString() == "worst");
+            Require(probe.Status.FrameReady && requestedQuality,
+                $"quality switch waited for history reply: requested={requestedQuality}, decoded={probe.Status.FrameReady}, probeMs={probe.ElapsedMs}");
+            Require(probe.Status.Paused && Math.Abs(probe.Status.Position - 2) < 0.2,
+                $"quality switch lost pause or position: paused={probe.Status.Paused}, position={probe.Status.Position}");
+            Require(Field<string>("_quality") == "worst", "quality selection was not preserved");
+            return new { decodedBeforeHistoryReply = true, requestedQuality, paused = probe.Status.Paused, position = probe.Status.Position, probe.ElapsedMs };
+        });
         await Check("content_unavailable_skips_only_one_real_candidate", async () =>
         {
             using var fixture = new Fixture("skip");
@@ -347,6 +448,31 @@ internal static class Program
         }
     }
 
+    private static async Task<(MpvStatus Status, JsonElement Stats, long ElapsedMs)> SwitchWithDelayedHistoryAsync(Func<Task> switchPlayback)
+    {
+        await BackendCall("fixture_hold_history");
+        Task switching = switchPlayback();
+        var timer = Stopwatch.StartNew();
+        try
+        {
+            // 后端明确进入历史等待后才观察首帧，避免把未触发的延迟误判为通过。
+            await BackendCall("fixture_wait_history");
+            while (timer.ElapsedMilliseconds < 3000 && Field<MpvPlayer?>("_player")?.GetStatus().FrameReady != true)
+                await Task.Delay(20);
+            MpvStatus status = Field<MpvPlayer>("_player").GetStatus();
+            JsonElement stats = await BackendCall("fixture_stats");
+            Require(stats.GetProperty("delayedHistoryRecords").GetInt32() > 0
+                && !stats.GetProperty("historyReleased").GetBoolean(), "history delay was not active during playback probe");
+            return (status, stats, timer.ElapsedMilliseconds);
+        }
+        finally
+        {
+            // 无论断言是否通过都释放测试后端，避免留下一次等待 70 秒的历史请求。
+            await BackendCall("fixture_release_history");
+            await switching.WaitAsync(TimeSpan.FromSeconds(12));
+        }
+    }
+
     private static async Task OpenSeasonAsync()
     {
         Control<CheckBox>("AutoNextCheck").IsChecked = true;
@@ -367,9 +493,13 @@ internal static class Program
     private sealed class Fixture : IDisposable
     {
         private readonly object _backend;
+        private readonly string _directory = Path.Combine(Path.GetTempPath(), "openhongguo-feed-" + Guid.NewGuid().ToString("N"));
+        public string DirectoryPath => _directory;
+        public bool Closed { get; private set; }
         public Fixture(string scenario)
         {
-            var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
+            Directory.CreateDirectory(_directory);
+            var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = _directory, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
             start.ArgumentList.Add("--fixture");
             start.ArgumentList.Add(scenario);
             start.ArgumentList.Add(Sample);
@@ -388,15 +518,24 @@ internal static class Program
             InputMethod.SetIsInputMethodSuspended(Window, true);
             var loaded = (RoutedEventHandler)Delegate.CreateDelegate(typeof(RoutedEventHandler), Window, typeof(MainWindow).GetMethod("Window_Loaded", PrivateInstance)!);
             Window.Loaded -= loaded;
+            // 即使被测导航触发目录缓存，读写也仅发生在该用例独占的临时目录。
+            Set("_configDir", _directory);
             Set("_backend", _backend);
             Control<CheckBox>("AutoNextCheck").IsChecked = false;
             Control<Slider>("VolumeSlider").Value = 0;
             System.Windows.Application.Current.MainWindow = Window;
+            Window.Closed += (_, _) => Closed = true;
             Window.Show();
         }
 
         public void Dispose()
         {
+            if (Closed)
+            {
+                ((IDisposable)_backend).Dispose();
+                Directory.Delete(_directory, true);
+                return;
+            }
             Set("_closing", true);
             Invoke("RestoreWindowControls");
             Invoke("CancelNextPlayback");
@@ -415,6 +554,7 @@ internal static class Program
             ((IDisposable)_backend).Dispose();
             Control<NativeVideoHost>("VideoHost").Dispose();
             Window.Close();
+            Directory.Delete(_directory, true);
         }
     }
 
@@ -425,6 +565,12 @@ internal static class Program
         var tasks = new List<Task>();
         var seriesIds = new List<string>();
         var recommendations = new List<object>();
+        var playbackEpisodes = new List<string>();
+        var playbackQualities = new List<string>();
+        var historyEpisodes = new List<int>();
+        var historyStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource? historyRelease = null;
+        int delayedHistoryRecords = 0;
         int activeSeries = 0, maxSeries = 0, recommendCalls = 0;
         void Reply(object response) { lock (sync) Console.WriteLine(JsonSerializer.Serialize(response)); }
         async Task Handle(string id, string method, JsonElement arguments, CancellationToken token)
@@ -452,7 +598,11 @@ internal static class Program
                         string? code = scenario.StartsWith("candidate:", StringComparison.Ordinal) && series.StartsWith("1", StringComparison.Ordinal) ? scenario[10..]
                             : scenario == "bound" || scenario == "bound-tail" && int.Parse(series) < 1006 || scenario == "skip" && series == "1001" ? "CONTENT_UNAVAILABLE" : null;
                         if (code != null) { Reply(new { id, error = new { code, message = "fixture " + code } }); return; }
-                        object[] episodes = scenario == "season-unavailable-episode" && series == "3001"
+                        object[] episodes = scenario == "history-order-delay"
+                            ? Enumerable.Range(1, 3).Select(number => (object)new { id = series + "0" + number, series_id = series, number, playable = true }).ToArray()
+                            : scenario == "manual-history-delay"
+                            ? new object[] { new { id = series + "01", series_id = series, number = 1, playable = true }, new { id = series + "02", series_id = series, number = 2, playable = true } }
+                            : scenario == "season-unavailable-episode" && series == "3001"
                             ? new object[] { new { id = series + "01", series_id = series, number = 1, playable = true }, new { id = series + "02", series_id = series, number = 2, playable = false } }
                             : new object[] { new { id = series + "01", series_id = series, number = 1, playable = true } };
                         result = new { series = new { id = series, title = "本地候选 " + series, episode_count = episodes.Length, is_multi_season = series.StartsWith("3", StringComparison.Ordinal), related_album_id = series.StartsWith("3", StringComparison.Ordinal) ? "fixture-album" : "", season_index = series == "3001" ? 1 : series == "3002" ? 2 : 0 }, episodes };
@@ -462,11 +612,60 @@ internal static class Program
                 else if (method == "playback")
                 {
                     string episode = arguments.GetProperty("episode_id").GetString()!;
+                    lock (sync)
+                    {
+                        playbackEpisodes.Add(episode);
+                        playbackQualities.Add(arguments.GetProperty("quality").GetString() ?? "");
+                    }
                     if (scenario.StartsWith("playback:", StringComparison.Ordinal) && episode.StartsWith("1001", StringComparison.Ordinal))
                     { string code = scenario[9..]; Reply(new { id, error = new { code, message = "fixture " + code } }); return; }
                     result = new { url = sample, duration_seconds = 6, expires_at = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(), definition = "local" };
                 }
-                else if (method == "fixture_stats") { lock (sync) result = new { seriesCalls = seriesIds.Count, seriesIds = seriesIds.ToArray(), maxSeriesInFlight = maxSeries, recommendCalls, recommendRequests = recommendations.ToArray() }; }
+                else if (method == "fixture_stats") { lock (sync) result = new { seriesCalls = seriesIds.Count, seriesIds = seriesIds.ToArray(), maxSeriesInFlight = maxSeries, recommendCalls, recommendRequests = recommendations.ToArray(), playbackEpisodes = playbackEpisodes.ToArray(), playbackQualities = playbackQualities.ToArray(), historyEpisodes = historyEpisodes.ToArray(), delayedHistoryRecords, historyReleased = historyRelease?.Task.IsCompleted == true }; }
+                else if (method == "fixture_hold_history")
+                {
+                    lock (sync) historyRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    result = new { };
+                }
+                else if (method == "fixture_wait_history")
+                {
+                    await historyStarted.Task.WaitAsync(token);
+                    result = new { };
+                }
+                else if (method == "fixture_release_history")
+                {
+                    lock (sync) historyRelease?.TrySetResult();
+                    result = new { };
+                }
+                else if (method == "fixture_release_history_after")
+                {
+                    int milliseconds = arguments.GetProperty("milliseconds").GetInt32();
+                    TaskCompletionSource? delayed;
+                    lock (sync) delayed = historyRelease;
+                    _ = Task.Run(async () => { await Task.Delay(milliseconds); delayed?.TrySetResult(); });
+                    result = new { };
+                }
+                else if (method == "history_record")
+                {
+                    Task? delayed;
+                    lock (sync)
+                    {
+                        delayed = scenario == "history-order-delay" && delayedHistoryRecords > 0 ? null : historyRelease?.Task;
+                        if (delayed != null && !delayed.IsCompleted)
+                        {
+                            delayedHistoryRecords++;
+                            historyStarted.TrySetResult();
+                        }
+                    }
+                    if (delayed != null) await delayed.WaitAsync(token);
+                    lock (sync)
+                    {
+                        int episode = arguments.GetProperty("episode").GetInt32();
+                        historyEpisodes.Add(episode);
+                        if (scenario == "history-order-delay") File.AppendAllLines("history-episodes.txt", new[] { episode.ToString() });
+                    }
+                    result = new { };
+                }
                 else if (method == "fixture_failure") { string code = arguments.GetProperty("code").GetString()!; Reply(new { id, error = new { code, message = "fixture " + code } }); return; }
                 else if (method == "seasons")
                 {
