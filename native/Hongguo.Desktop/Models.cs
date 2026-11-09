@@ -141,8 +141,12 @@ public class PlaybackInfo
     [JsonPropertyName("audio_url")] public string AudioUrl { get; set; } = "";
     [JsonPropertyName("key")] public string Key { get; set; } = "";
     [JsonPropertyName("duration_seconds")] public double DurationSeconds { get; set; }
+    [JsonPropertyName("duration_ms")] public long DurationMS { get; set; }
     [JsonPropertyName("expires_at")] public long ExpiresAt { get; set; }
     [JsonPropertyName("definition")] public string Definition { get; set; } = "";
+    [JsonPropertyName("width")] public int Width { get; set; }
+    [JsonPropertyName("height")] public int Height { get; set; }
+    [JsonPropertyName("bitrate")] public long Bitrate { get; set; }
     [JsonPropertyName("available_qualities")] public List<PlaybackQuality> AvailableQualities { get; set; } = [];
 }
 

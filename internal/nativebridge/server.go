@@ -196,6 +196,7 @@ func (s *Server) Dispatch(ctx context.Context, request Request) (any, error) {
 		SeriesID   string              `json:"series_id"`
 		EpisodeID  string              `json:"episode_id"`
 		Quality    string              `json:"quality"`
+		DurationMS int64               `json:"duration_ms"`
 	}
 	if len(request.Args) > 0 && string(request.Args) != "null" {
 		if err := json.Unmarshal(request.Args, &args); err != nil {
@@ -258,6 +259,8 @@ func (s *Server) Dispatch(ctx context.Context, request Request) (any, error) {
 		// 筛选结果保留服务端的顺序与续页条件，补图不阻塞目录显示。
 		s.applyCached(page.Items)
 		return page, nil
+	case "comments", "danmaku":
+		return s.discussion(ctx, request.Method, args.SeriesID, args.EpisodeID, args.Cursor, args.DurationMS)
 	case "engagement":
 		if !validID(args.SeriesID) || (args.EpisodeID != "" && !validID(args.EpisodeID)) {
 			return nil, errInvalidInput
@@ -270,7 +273,7 @@ func (s *Server) Dispatch(ctx context.Context, request Request) (any, error) {
 			SeriesID: args.SeriesID, EpisodeID: args.EpisodeID,
 			PlayCount: knownCount(detail.Series.PlayCount), FollowCount: knownCount(detail.Series.FollowCount),
 			SeriesLikeCount: knownCount(detail.Series.DiggCount),
-			Note:            "追剧数与收藏不同；弹幕、评论正文及收藏量暂未返回，未确认的计数显示 —。",
+			Note:            "追剧数与收藏不同；互动正文以单独加载结果为准，未确认的计数显示 —。",
 		}
 		if args.EpisodeID == "" {
 			return result, nil
@@ -279,6 +282,9 @@ func (s *Server) Dispatch(ctx context.Context, request Request) (any, error) {
 			if episode.ID == args.EpisodeID {
 				result.EpisodeLikeCount = knownCount(episode.DiggCount)
 				result.CommentCount = knownCount(episode.CommentCount)
+				// 旗标只表示接口支持，正文是否返回由独立请求决定。
+				_, result.CommentsAvailable = s.Service.(episodeCommentsService)
+				_, result.DanmakuAvailable = s.Service.(danmakuService)
 				return result, nil
 			}
 		}
@@ -396,7 +402,7 @@ func (s *Server) Dispatch(ctx context.Context, request Request) (any, error) {
 		}
 		// 播放参数只通过父子进程的私有管道传递，不输出到日志或界面。
 		definition := streamSelector(stream)
-		return map[string]any{"url": stream.URL, "audio_url": pb.AudioURL, "key": key, "duration_seconds": pb.DurationSeconds, "expires_at": pb.ExpiresAt, "definition": definition, "width": stream.Width, "height": stream.Height, "available_qualities": availableQualities(pb)}, nil
+		return map[string]any{"url": stream.URL, "audio_url": pb.AudioURL, "key": key, "duration_seconds": pb.DurationSeconds, "duration_ms": pb.DurationMS, "expires_at": pb.ExpiresAt, "definition": definition, "width": stream.Width, "height": stream.Height, "bitrate": stream.Bitrate, "available_qualities": availableQualities(pb)}, nil
 	case "history":
 		return s.History.List(ctx)
 	case "history_record":
@@ -472,6 +478,12 @@ func (s *Server) playback(ctx context.Context, id string) (*model.Playback, erro
 	}
 	if pb == nil {
 		return nil, sdk.ErrAnonymousLimited
+	}
+	if pb.Protected {
+		if _, err := sdk.ContentKey(pb); err != nil {
+			// 损坏的密钥材料不进入缓存，重试时重新请求播放模型。
+			return nil, err
+		}
 	}
 	// 同一集切换画质复用尚未过期的模型，媒体参数只留在内存中。
 	s.mu.Lock()

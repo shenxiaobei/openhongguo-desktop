@@ -100,6 +100,12 @@ public partial class MainWindow
             Button back = CreatePlaybackMenuRow("‹  画质", "返回", () => SetPlaybackMenuPage("root"));
             back.Name = "PlaybackMenuBack";
             content.Children.Add(back);
+            content.Children.Add(new TextBlock
+            {
+                Name = "QualityPlaybackInfo", Text = GetCurrentQualityDescription(), FontSize = 11,
+                Foreground = (System.Windows.Media.Brush)FindResource("MutedBrush"),
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(11, 3, 11, 6)
+            });
             AddPlaybackMenuDivider(content);
             int index = 0;
             foreach (PlaybackQuality quality in QualityCombo.Items.OfType<PlaybackQuality>())
@@ -116,6 +122,10 @@ public partial class MainWindow
                 content.Children.Add(option);
             }
         }
+        else if (page == "danmaku")
+        {
+            ShowDanmakuMenu(content);
+        }
         else if (page == "framing")
         {
             Button back = CreatePlaybackMenuRow("‹  画面模式", "返回", () => SetPlaybackMenuPage("root"));
@@ -129,7 +139,7 @@ public partial class MainWindow
             }, selected: !_fillVideoWindow);
             fit.Name = "PlaybackFramingFitOption";
             content.Children.Add(fit);
-            Button fill = CreatePlaybackMenuRow("裁切铺满", "会裁掉边缘", () =>
+            Button fill = CreatePlaybackMenuRow("拉伸铺满", "保留全画面，比例随窗口", () =>
             {
                 SetVideoFillMode(true);
                 ClosePlaybackOptions();
@@ -150,10 +160,14 @@ public partial class MainWindow
             qualityRow.Name = "PlaybackQualityMenuButton";
             qualityRow.SetBinding(IsEnabledProperty, new Binding(nameof(IsEnabled)) { Source = QualityCombo });
             content.Children.Add(qualityRow);
-            Button framingRow = CreatePlaybackMenuRow("画面模式", _fillVideoWindow ? "裁切铺满" : "完整显示",
+            Button framingRow = CreatePlaybackMenuRow("画面模式", _fillVideoWindow ? "拉伸铺满" : "完整显示",
                 () => SetPlaybackMenuPage("framing"), submenu: true);
             framingRow.Name = "PlaybackFramingMenuButton";
             content.Children.Add(framingRow);
+            Button danmakuRow = CreatePlaybackMenuRow("弹幕", DanmakuSettingsSummary(),
+                () => SetPlaybackMenuPage("danmaku"), submenu: true);
+            danmakuRow.Name = "PlaybackDanmakuMenuButton";
+            content.Children.Add(danmakuRow);
             AddPlaybackMenuDivider(content);
 
             Grid autoRow = CreatePlaybackSettingRow("自动连播");

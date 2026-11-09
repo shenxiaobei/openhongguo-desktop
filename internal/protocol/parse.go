@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"sort"
 	"strconv"
@@ -739,14 +740,9 @@ func parseSeriesPayload(payload wireSeriesPayload) (*model.Series, []model.Episo
 	return series, episodes, nil
 }
 
-// ParsePlayback reads a video_model response into a media model.
-//
-// The wire value is the shipped client's TTVideoEngine model: a JSON string at
-// data.video_model whose video_list holds one object per representation.
-// A representation is marked protected when it carries encrypt_info,
-// gear_des_key, spade_a, kid, check_info, encryption_method, or encrypt=true.
-// Keys and per-segment check data are used only to set Protected; they are
-// never copied into the returned model.
+// ParsePlayback 解析 data.video_model 中的 TTVideoEngine 播放模型。
+// 加密状态依据明确的加密标记判断；普通码流描述和完整性校验不代表加密。
+// 包装后的密钥仅保留在不参与序列化的 KeyMaterial 中，校验数据不向外传递。
 func ParsePlayback(raw []byte, episodeID string) (*model.Playback, error) {
 	var env struct {
 		Code    flexString `json:"code"`
@@ -784,38 +780,44 @@ func ParsePlayback(raw []byte, episodeID string) (*model.Playback, error) {
 			return nil, err
 		}
 	}
-	audioURL := ""
-	if len(items) == 0 {
-		// Full-length titles are delivered as a segmented (DASH) model: a set
-		// of video renditions plus a separate audio track, with no video_list.
-		var dynamic struct {
-			VideoList []json.RawMessage `json:"dynamic_video_list"`
-			AudioList []json.RawMessage `json:"dynamic_audio_list"`
+	ordinary := playbackGroup(items, "")
+	dynamic, dynamicErr := dynamicPlaybackGroup(video.Dynamic)
+	out := ordinary
+	if dynamicErr != nil {
+		// 动态组损坏不影响已有普通流；普通组也不可用时保留解析错误。
+		if len(ordinary.Streams) == 0 {
+			return nil, dynamicErr
 		}
-		if raw := nonEmptyJSON(video.Dynamic); len(raw) > 0 {
-			if err := json.Unmarshal(raw, &dynamic); err != nil {
-				return nil, fmt.Errorf("playback dynamic model is not JSON: %w", err)
-			}
-		}
-		items, err = playbackItemsList(dynamic.VideoList)
-		if err != nil {
-			return nil, err
-		}
-		if len(dynamic.AudioList) > 0 {
-			var track playbackItem
-			if err := json.Unmarshal(dynamic.AudioList[0], &track); err == nil {
-				audioURL = strings.TrimSpace(track.MainURL)
+	} else if len(dynamic.Streams) > 0 {
+		if len(ordinary.Streams) == 0 {
+			out = dynamic
+		} else {
+			ordinaryBest, _ := ordinary.Select("best")
+			dynamicBest, _ := dynamic.Select("best")
+			// 复用SDK的分辨率、码率排序；同档同码率时稳定排序保留普通组。
+			comparison := model.Playback{Streams: []model.Stream{dynamicBest, ordinaryBest}}
+			best, _ := comparison.Select("best")
+			if best != ordinaryBest {
+				// 整组切换，防止高档视频误用另一组的音轨或密钥上下文。
+				out = dynamic
 			}
 		}
 	}
-	out := &model.Playback{
-		EpisodeID:       episodeID,
-		VideoID:         video.VideoID.String(),
-		MediaType:       strings.TrimSpace(video.MediaType),
-		DurationSeconds: int(video.Duration + 0.5),
-		ExpiresAt:       int64(video.URLExpire),
-		Streams:         make([]model.Stream, 0, len(items)),
+	if len(out.Streams) == 0 {
+		return nil, fmt.Errorf("playback model unavailable")
 	}
+	out.EpisodeID = episodeID
+	out.VideoID = video.VideoID.String()
+	out.MediaType = strings.TrimSpace(video.MediaType)
+	out.DurationSeconds = int(video.Duration + 0.5)
+	out.DurationMS = int64(math.Round(video.Duration * 1000))
+	out.ExpiresAt = int64(video.URLExpire)
+	return out, nil
+}
+
+// playbackGroup只在同一组内收集视频、音轨和保护上下文。
+func playbackGroup(items []playbackItem, audioURL string) *model.Playback {
+	out := &model.Playback{AudioURL: audioURL, Streams: make([]model.Stream, 0, len(items))}
 	protected := 0
 	for _, item := range items {
 		stream := item.stream()
@@ -830,11 +832,37 @@ func ParsePlayback(raw []byte, episodeID string) (*model.Playback, error) {
 		}
 		out.Streams = append(out.Streams, stream)
 	}
-	if len(out.Streams) == 0 {
-		return nil, fmt.Errorf("playback model unavailable")
+	out.Protected = len(out.Streams) > 0 && protected == len(out.Streams)
+	return out
+}
+
+// dynamicPlaybackGroup完整解析动态组；声明的首选音轨损坏时不将该组当作可替换来源。
+func dynamicPlaybackGroup(raw json.RawMessage) (*model.Playback, error) {
+	var dynamic struct {
+		VideoList []json.RawMessage `json:"dynamic_video_list"`
+		AudioList []json.RawMessage `json:"dynamic_audio_list"`
 	}
-	out.AudioURL = audioURL
-	out.Protected = protected == len(out.Streams)
+	if raw := nonEmptyJSON(raw); len(raw) > 0 {
+		if err := json.Unmarshal(raw, &dynamic); err != nil {
+			return nil, fmt.Errorf("playback dynamic model is not JSON: %w", err)
+		}
+	}
+	items, err := playbackItemsList(dynamic.VideoList)
+	if err != nil {
+		return nil, err
+	}
+	audioURL := ""
+	if len(dynamic.AudioList) > 0 {
+		var track playbackItem
+		if err := json.Unmarshal(dynamic.AudioList[0], &track); err != nil {
+			return nil, fmt.Errorf("playback dynamic audio is not JSON: %w", err)
+		}
+		audioURL = strings.TrimSpace(track.MainURL)
+		if audioURL == "" {
+			return nil, fmt.Errorf("playback dynamic audio URL unavailable")
+		}
+	}
+	out := playbackGroup(items, audioURL)
 	return out, nil
 }
 
@@ -950,39 +978,66 @@ func (it playbackItem) wrappedKey() string {
 	return strings.TrimSpace(it.SpadeA)
 }
 
-// protection reads the shipped client's encryption markers.
-// It returns only the scheme name, never key material.
+// protection 区分加密标记与普通媒体元数据，只返回保护状态和方案名。
 func (it playbackItem) protection() (bool, string) {
 	method := strings.TrimSpace(it.Encryption)
 	if raw := nonEmptyJSON(it.EncryptInfo); len(raw) > 0 && raw[0] == '{' {
 		var info struct {
-			Encrypt bool   `json:"encrypt"`
-			Method  string `json:"encryption_method"`
-			Kid     string `json:"kid"`
-			SpadeA  string `json:"spade_a"`
+			Encrypt json.RawMessage `json:"encrypt"`
+			Method  string          `json:"encryption_method"`
+			Kid     string          `json:"kid"`
+			SpadeA  string          `json:"spade_a"`
 		}
-		if err := json.Unmarshal(raw, &info); err == nil {
-			if method == "" {
-				method = strings.TrimSpace(info.Method)
-			}
-			if info.Encrypt || method != "" || info.Kid != "" || info.SpadeA != "" {
-				return true, method
-			}
+		if err := json.Unmarshal(raw, &info); err != nil {
+			// 加密信息结构损坏时保留保护状态，不把未知加密模型当明文尝试。
+			return true, method
 		}
-	} else if len(raw) > 0 {
-		// A non-object marker such as "protected" still marks the stream.
+		if method == "" {
+			method = strings.TrimSpace(info.Method)
+		}
+		if encryptionFlagSet(info.Encrypt) || method != "" || strings.TrimSpace(info.Kid) != "" || strings.TrimSpace(info.SpadeA) != "" {
+			return true, method
+		}
+	} else if encryptionFlagSet(raw) {
+		// 兼容旧响应的独立保护标记，同时识别 false、0 等明确关闭值。
 		return true, method
 	}
-	if it.GearDESKey != "" || it.SpadeA != "" || it.Kid != "" || method != "" {
+	if strings.TrimSpace(it.SpadeA) != "" || strings.TrimSpace(it.Kid) != "" || method != "" || encryptionFlagSet(it.Encrypt) {
 		return true, method
 	}
-	if jsonTruthy(it.Encrypt) {
-		return true, method
-	}
-	if len(nonEmptyJSON(it.CheckInfo)) > 0 {
-		return true, method
+	// gear_des_key 描述容器、编码和档位；只有编号 1 字段的加密枚举是保护证据。
+	// check_info 在明文片源中同样存在，只用于完整性校验，不参与加密判断。
+	for _, part := range strings.Split(it.GearDESKey, "|") {
+		key, value, ok := strings.Cut(part, ":")
+		if !ok || strings.TrimSpace(key) != "1" {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "encr", "encrypt", "encrypted":
+			return true, method
+		}
 	}
 	return false, method
+}
+
+// encryptionFlagSet 保留未知非空保护标记，但不把字符串 false/0 当成 true。
+func encryptionFlagSet(raw json.RawMessage) bool {
+	value := nonEmptyJSON(raw)
+	if len(value) == 0 {
+		return false
+	}
+	text := string(value)
+	if value[0] == '"' {
+		if err := json.Unmarshal(value, &text); err != nil {
+			return true
+		}
+	}
+	switch strings.ToLower(strings.TrimSpace(text)) {
+	case "", "false", "0":
+		return false
+	default:
+		return true
+	}
 }
 
 // playbackItems accepts video_list as an array or as an object keyed by
@@ -994,9 +1049,6 @@ func playbackItems(raw json.RawMessage) ([]playbackItem, error) {
 	}
 	var asList []playbackItem
 	if err := json.Unmarshal(b, &asList); err == nil {
-		if len(asList) == 0 {
-			return nil, fmt.Errorf("playback model unavailable")
-		}
 		return asList, nil
 	}
 	var asMap map[string]playbackItem
@@ -1004,7 +1056,7 @@ func playbackItems(raw json.RawMessage) ([]playbackItem, error) {
 		return nil, fmt.Errorf("playback model video_list is invalid: %w", err)
 	}
 	if len(asMap) == 0 {
-		return nil, fmt.Errorf("playback model unavailable")
+		return nil, nil
 	}
 	keys := make([]string, 0, len(asMap))
 	for k := range asMap {

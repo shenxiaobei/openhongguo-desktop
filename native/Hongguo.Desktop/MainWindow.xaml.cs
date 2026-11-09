@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     private string _searchTab = "剧集";
     private string _quality = "best";
     private string _lastSuccessfulQuality = "best";
+    private PlaybackInfo? _currentPlaybackInfo;
     private string _cursor = "";
     private string _feedCursor = "";
     private string _feedChannel = "";
@@ -103,6 +104,7 @@ public partial class MainWindow : Window
         QualityCombo.ItemsSource = _qualities;
         _playerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _playerTimer.Tick += PlayerTimer_Tick;
+        VideoHost.SizeChanged += (_, _) => _rollingDanmakuDirty = true;
         VideoHost.ToggleFullscreenRequested += (_, _) => ToggleFullscreen();
         VideoHost.ExitFullscreenRequested += (_, _) => ExitImmersivePlayback();
         VideoHost.TogglePauseRequested += (_, _) => TogglePause();
@@ -126,6 +128,8 @@ public partial class MainWindow : Window
         try
         {
             Directory.CreateDirectory(_configDir);
+            LoadDanmakuSettings();
+            ApplyDanmakuSettings();
             LoadSavedDiscoveryCache();
             _backend = new BackendClient(_configDir);
             await _backend.CallAsync("status");
@@ -163,6 +167,8 @@ public partial class MainWindow : Window
         {
             if (_closing || !ReferenceEquals(sender, _player)) return;
             _playbackBusy = false;
+            _currentPlaybackInfo = null;
+            ResetRollingDanmaku();
             ShowError(string.IsNullOrWhiteSpace(message) ? "视频播放没有完成，请重试或选择其他分集。" : message, RetryCurrentPlaybackAsync);
             PlayingSubtitle.Text = "播放遇到问题，可以重试或切换分集";
         };
@@ -468,6 +474,7 @@ public partial class MainWindow : Window
         if (bufferedPlayback == null) _player?.Stop();
         _playerTimer.Stop();
         _playbackBusy = true;
+        _currentPlaybackInfo = null;
         _currentEpisode = episode;
         _ = RefreshEngagementAsync();
         _episodeCompleted = false;
@@ -508,6 +515,10 @@ public partial class MainWindow : Window
             _player!.SetSpeed(_speed);
             _player.SetVolume(VolumeSlider.Value);
             _player.SetPaused(paused);
+            _currentPlaybackInfo = playback;
+            PrepareRollingDanmakuForEpisode();
+            if (DiscussionPanel.Visibility == Visibility.Visible && _discussionTab == "danmaku" && !_discussionLoaded)
+                _ = LoadDiscussionAsync();
             UpdateQualityOptions(playback);
             _lastSuccessfulQuality = _quality;
             PauseButton.IsEnabled = true;
@@ -528,6 +539,7 @@ public partial class MainWindow : Window
             if (version != _playVersion || _closing) return;
             _lastPlaybackFailure = error;
             _playbackBusy = false;
+            _currentPlaybackInfo = null;
             _quality = _lastSuccessfulQuality;
             _updatingQualities = true;
             QualityCombo.SelectedItem = _qualities.FirstOrDefault(item => item.Definition == _quality);
@@ -556,7 +568,7 @@ public partial class MainWindow : Window
             }
             QualityCombo.SelectedItem = _qualities.FirstOrDefault(item => item.Definition == _quality) ?? _qualities[0];
             QualityCombo.IsEnabled = true;
-            QualityCombo.ToolTip = string.IsNullOrWhiteSpace(playback.Definition) ? "当前分集实际提供的画质" : "当前画质：" + playback.Definition;
+            QualityCombo.ToolTip = GetCurrentQualityDescription();
         }
         finally
         {
@@ -572,6 +584,22 @@ public partial class MainWindow : Window
         if (!status.Loaded) return;
         _quality = definition;
         await PlayEpisodeCoreAsync(_currentEpisode, false, status.Position, status.Paused);
+    }
+
+    private string GetCurrentQualityDescription()
+    {
+        if (_currentPlaybackInfo == null) return "当前片源信息尚未就绪";
+        PlaybackInfo playback = _currentPlaybackInfo;
+        string description = "当前播放：" + (string.IsNullOrWhiteSpace(playback.Definition) ? "未标注档位" : playback.Definition);
+        MpvStatus? status = _player?.GetStatus();
+        // 优先展示实际解码尺寸，窗口拉伸后的显示大小不当作片源分辨率。
+        if (status?.FrameReady == true && status.VideoWidth > 0 && status.VideoHeight > 0)
+            description += $"\n解码分辨率：{status.VideoWidth}×{status.VideoHeight}";
+        else if (playback.Width > 0 && playback.Height > 0)
+            description += $"\n片源分辨率：{playback.Width}×{playback.Height}";
+        if (playback.Bitrate > 0)
+            description += $"\n片源码率：{playback.Bitrate / 1_000_000.0:0.##} Mbps";
+        return description;
     }
 
     private async void Quality_Changed(object sender, SelectionChangedEventArgs e)
@@ -592,6 +620,7 @@ public partial class MainWindow : Window
 
     private Task StopCurrentCoreAsync(bool preserveFeedRequest)
     {
+        ResetRollingDanmaku();
         CancelSeasons();
         CancelNextPlayback();
         Task saved = SaveHistoryAsync(false);
@@ -613,6 +642,7 @@ public partial class MainWindow : Window
         SeekSlider.IsEnabled = false;
         _currentEpisode = null;
         _currentSeries = null;
+        _currentPlaybackInfo = null;
         _episodeCompleted = false;
         return saved;
     }
@@ -733,6 +763,7 @@ public partial class MainWindow : Window
                 _player?.Stop();
                 _playerTimer.Stop();
                 _playbackBusy = false;
+                _currentPlaybackInfo = null;
                 PauseButton.IsEnabled = false;
                 QualityCombo.IsEnabled = false;
                 SeekSlider.IsEnabled = false;
@@ -915,6 +946,7 @@ public partial class MainWindow : Window
                 SeekSlider.IsEnabled = _duration > 0;
                 PauseButton.Content = status.Paused ? "播放" : "暂停";
                 TimeText.Text = $"{FormatTime(_position)} / {FormatTime(_duration)}";
+                UpdateRollingDanmaku(status);
                 if (!status.Paused) PrepareNextPlayback();
             }
             if ((DateTime.Now - _lastHistorySave).TotalSeconds >= 15)
@@ -1053,15 +1085,15 @@ public partial class MainWindow : Window
         RestoreWindowControls();
         if (!_fullscreen)
         {
-            SetVideoFillMode(false);
             // 屏幕全屏保留进入前的窗口内模式，退出后按原状态继续观看。
             _fullscreen = true;
             _previousWindowState = WindowState;
             WindowState = WindowState.Normal;
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.NoResize;
-            WindowState = WindowState.Maximized;
+            // 先移除标题栏附加边框，再最大化，避免客户区向屏幕四边各溢出数像素。
             UpdateCaptionIcon();
+            WindowState = WindowState.Maximized;
             ApplyShellLayout();
             RootLayout.UpdateLayout();
             MoveControlsToFullscreen();
@@ -1072,8 +1104,8 @@ public partial class MainWindow : Window
             WindowState = WindowState.Normal;
             WindowStyle = WindowStyle.SingleBorderWindow;
             ResizeMode = ResizeMode.CanResize;
-            WindowState = _previousWindowState;
             UpdateCaptionIcon();
+            WindowState = _previousWindowState;
             ApplyShellLayout();
             if (_windowCinema)
             {
@@ -1094,7 +1126,6 @@ public partial class MainWindow : Window
         CloseEpisodePicker();
         RestoreWindowControls();
         // 只改变客户区的播放布局，窗口位置、尺寸、标题栏和最大化状态保持原值。
-        if (!_windowCinema) SetVideoFillMode(false);
         _windowCinema = !_windowCinema;
         ApplyShellLayout();
         if (_windowCinema)
@@ -1304,6 +1335,12 @@ public partial class MainWindow : Window
         if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.ButtonBase && e.Key is Key.Space or Key.Enter) return;
         if (SpeedCombo.IsKeyboardFocusWithin || QualityCombo.IsKeyboardFocusWithin || SearchTabCombo.IsKeyboardFocusWithin || RankContentCombo.IsKeyboardFocusWithin || RankBoardCombo.IsKeyboardFocusWithin) return;
         if (PlayerScreen.Visibility != Visibility.Visible) return;
+        if (e.Key == Key.D && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            ToggleDanmaku_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
         if (e.Key == Key.Space) { TogglePause(); e.Handled = true; }
         if (_feedMode && (e.Key == Key.Down || e.Key == Key.Up))
         {

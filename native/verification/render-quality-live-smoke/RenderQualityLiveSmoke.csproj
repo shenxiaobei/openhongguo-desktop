@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <GenerateSupportedTargetFrameworkAlias>false</GenerateSupportedTargetFrameworkAlias>
+    <ApplicationManifest>../../Hongguo.Desktop/app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Hongguo.Desktop/Hongguo.Desktop.csproj" />
+    <None Include="../../Hongguo.Desktop/App.xaml" Link="AppResources.xaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

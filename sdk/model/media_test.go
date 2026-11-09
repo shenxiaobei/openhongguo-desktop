@@ -36,3 +36,38 @@ func TestSelectReportsAvailableDefinitions(t *testing.T) {
 		t.Fatalf("err = %s", got)
 	}
 }
+
+func TestSelectSpecificQualityUsesHighestBitrate(t *testing.T) {
+	p := &Playback{Streams: []Stream{
+		{Definition: "720p", Quality: "normal", Codec: "h264", Width: 1280, Height: 720, Bitrate: 900, URL: "https://media.invalid/720-low.mp4"},
+		{Definition: "720p", Quality: "normal", Codec: "h264", Width: 1280, Height: 720, Bitrate: 1800, URL: "https://media.invalid/720-high.mp4"},
+		{Definition: "720p", Quality: "normal", Codec: "h264", Width: 1280, Height: 720, Bitrate: 9000, URL: " "},
+	}}
+	for _, quality := range []string{"720p", "normal", "h264", " 720P ", " NORMAL ", " H264 "} {
+		t.Run(quality, func(t *testing.T) {
+			stream, err := p.Select(quality)
+			if err != nil || stream.Bitrate != 1800 || stream.URL != "https://media.invalid/720-high.mp4" {
+				t.Fatalf("同档位未选择最高码率：quality=%q bitrate=%d err=%v", quality, stream.Bitrate, err)
+			}
+		})
+	}
+	stream, err := p.Select("worst")
+	if err != nil || stream.Bitrate != 900 {
+		t.Fatalf("流畅优先选择被改变：bitrate=%d err=%v", stream.Bitrate, err)
+	}
+}
+
+func TestSelectComparesPortraitAndLandscapeByShortEdge(t *testing.T) {
+	p := &Playback{Streams: []Stream{
+		{Definition: "540p", Width: 540, Height: 960, Bitrate: 3000, URL: "https://media.invalid/portrait-540.mp4"},
+		{Definition: "720p", Width: 1280, Height: 720, Bitrate: 2000, URL: "https://media.invalid/landscape-720.mp4"},
+	}}
+	best, err := p.Select("best")
+	if err != nil || best.Definition != "720p" {
+		t.Fatalf("最高分辨率按竖向高度误排：definition=%q err=%v", best.Definition, err)
+	}
+	worst, err := p.Select("worst")
+	if err != nil || worst.Definition != "540p" {
+		t.Fatalf("最低分辨率按竖向高度误排：definition=%q err=%v", worst.Definition, err)
+	}
+}

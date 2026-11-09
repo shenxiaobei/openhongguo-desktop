@@ -10,5 +10,6 @@ public partial class MainWindow
         _player?.SetFillWindow(fillWindow);
         _standbyPlayer?.SetFillWindow(fillWindow);
         _fillVideoWindow = fillWindow;
+        _rollingDanmakuDirty = true;
     }
 }

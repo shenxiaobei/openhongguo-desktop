@@ -75,11 +75,8 @@ public partial class MainWindow
             _presentationSource = null;
         };
         RankingItems.ItemsSource = _ranking;
-        SizeChanged += (_, args) =>
+        SizeChanged += (_, _) =>
         {
-            // 裁切仅作用于当前窗口尺寸；缩放后恢复完整画面，避免字幕随比例变化被裁掉。
-            if ((args.WidthChanged || args.HeightChanged) && _fillVideoWindow)
-                SetVideoFillMode(false);
             ApplyResponsiveLayout();
         };
         ShellViewport.ScrollChanged += (_, args) =>
@@ -126,9 +123,6 @@ public partial class MainWindow
         Deactivated += (_, _) => HideFullscreenControls();
         StateChanged += (_, _) =>
         {
-            // 最大化扩大的是播放区域，显式裁切模式不能随窗口入口继续裁掉字幕。
-            if (!_closing && WindowState == WindowState.Maximized && PlayerScreen.Visibility == Visibility.Visible)
-                SetVideoFillMode(false);
             if (WindowState == WindowState.Minimized) HideFullscreenControls();
             else RevealFullscreenControls();
         };
@@ -253,6 +247,7 @@ public partial class MainWindow
         if (PlayerControls == null || SettingsGroup == null) return;
         double width = PlayerControls.ActualWidth;
         PlaybackOptionsButton.Visibility = Visibility.Visible;
+        DanmakuToggleButton.Visibility = width < 330 ? Visibility.Collapsed : Visibility.Visible;
         PlayerControls.Padding = new Thickness(width < 400 ? 6 : 10, 0, width < 400 ? 6 : 10, 0);
         SeekSlider.Height = 20;
         SeekSlider.Margin = new Thickness(width < 400 ? 6 : 12, 0, width < 400 ? 8 : 16, 0);

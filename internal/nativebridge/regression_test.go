@@ -111,7 +111,7 @@ func TestHydrateReturnsRealPostersAndReusesDetailCache(t *testing.T) {
 
 func TestPlaybackQualityChoicesMatchSDKAndReuseUnexpiredModel(t *testing.T) {
 	calls := 0
-	pb := &model.Playback{EpisodeID: "2001", ExpiresAt: time.Now().Add(time.Hour).Unix(), Streams: []model.Stream{
+	pb := &model.Playback{EpisodeID: "2001", DurationSeconds: 88, DurationMS: 88400, ExpiresAt: time.Now().Add(time.Hour).Unix(), Streams: []model.Stream{
 		{Definition: "720p", Width: 1280, Height: 720, Bitrate: 2000, URL: "https://media.invalid/720-high"},
 		{Definition: "2160p", Width: 3840, Height: 2160, Bitrate: 8000, URL: "https://media.invalid/2160"},
 		{Definition: "720p", Width: 1280, Height: 720, Bitrate: 1000, URL: "https://media.invalid/720-low"},
@@ -127,12 +127,18 @@ func TestPlaybackQualityChoicesMatchSDKAndReuseUnexpiredModel(t *testing.T) {
 		if value["expires_at"] != pb.ExpiresAt {
 			t.Fatalf("预准备所需有效期未透传：%v", value["expires_at"])
 		}
+		if value["duration_seconds"] != 88 || value["duration_ms"] != int64(88400) {
+			t.Fatalf("时长精度或兼容字段丢失：seconds=%v milliseconds=%v", value["duration_seconds"], value["duration_ms"])
+		}
 		stream, _ := pb.Select(quality)
 		if value["url"] != stream.URL || value["definition"] != stream.Definition {
 			t.Fatalf("画质选择与SDK不一致：%+v", value)
 		}
+		if value["width"] != stream.Width || value["height"] != stream.Height || value["bitrate"] != stream.Bitrate {
+			t.Fatalf("当前码流元数据未完整透传：width=%v height=%v bitrate=%v", value["width"], value["height"], value["bitrate"])
+		}
 		choices := value["available_qualities"].([]playbackQuality)
-		if len(choices) != 2 || choices[0].Definition != "720p" || choices[0].Bitrate != 1000 {
+		if len(choices) != 2 || choices[0].Definition != "720p" || choices[0].Bitrate != 2000 {
 			t.Fatalf("选项元数据与真实选择不一致：%+v", choices)
 		}
 		for _, choice := range choices {

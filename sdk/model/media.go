@@ -15,6 +15,8 @@ type Playback struct {
 	// MediaType 是服务端的媒体类型，例如 "video"。
 	MediaType       string `json:"media_type,omitempty"`
 	DurationSeconds int    `json:"duration_seconds,omitempty"`
+	// DurationMS 保留源模型的小数秒精度，供弹幕等时间轴功能使用。
+	DurationMS int64 `json:"duration_ms,omitempty"`
 	// ExpiresAt 是流 URL 失效的时间，单位是 unix 秒。
 	ExpiresAt int64 `json:"expires_at,omitempty"`
 	// Protected 标记加密的分集；参见 Stream.Protected。
@@ -66,7 +68,7 @@ type Stream struct {
 
 // Select 选出一个可播放的表示形式。quality 为空时，先选最高分辨率，
 // 再选最高码率。"worst" 选最低的。其他值匹配分辨率标签（"720p"）、
-// 画质标签（"normal"）或编码。没有 URL 的流永远不会被选中。
+// 画质标签（"normal"）或编码，并按相同顺序选出匹配流。没有 URL 的流永远不会被选中。
 func (p *Playback) Select(quality string) (Stream, error) {
 	if p == nil {
 		return Stream{}, fmt.Errorf("playback model is missing")
@@ -94,17 +96,22 @@ func (p *Playback) Select(quality string) (Stream, error) {
 	case "worst":
 		return usable[0], nil
 	}
-	for _, s := range usable {
-		if strings.EqualFold(s.Definition, quality) || strings.EqualFold(s.Quality, quality) || strings.EqualFold(s.Codec, quality) {
+	// 从高到低匹配，避免手动选择同档位时反而取到最低码率。
+	for i := len(usable) - 1; i >= 0; i-- {
+		s := usable[i]
+		if strings.EqualFold(s.Definition, want) || strings.EqualFold(s.Quality, want) || strings.EqualFold(s.Codec, want) {
 			return s, nil
 		}
 	}
 	return Stream{}, fmt.Errorf("quality %q is not offered (available: %s)", quality, strings.Join(definitions(usable), " "))
 }
 
-// heightRank 给表示形式排序。显式的高度优先；
-// 否则取分辨率标签开头的数字（"1080p"、"720p"）。
+// heightRank 优先按完整尺寸的短边排序，避免把竖屏的长边当成更高画质。
+// 尺寸缺失时兼容原有高度、分辨率标签和宽度回退。
 func heightRank(s Stream) int {
+	if s.Width > 0 && s.Height > 0 {
+		return min(s.Width, s.Height)
+	}
 	if s.Height > 0 {
 		return s.Height
 	}

@@ -22,7 +22,7 @@ public sealed class MpvStatus
 }
 
 // 视频始终留在原生子窗口内；界面只负责控件与布局，不启动浏览器或外部播放器。
-public sealed class MpvPlayer : IDisposable
+public sealed partial class MpvPlayer : IDisposable
 {
     private readonly object _gate = new();
     private readonly Api _api;
@@ -71,6 +71,9 @@ public sealed class MpvPlayer : IDisposable
             SetOption("panscan", "0");
             SetOption("vo", "gpu-next");
             SetOption("gpu-api", "d3d11");
+            // 缩小时保留细线与纹理，并抑制高反差边缘的振铃；不额外锐化原尺寸画面。
+            SetOption("dscale", "ewa_lanczossharp");
+            SetOption("dscale-antiring", "1");
             SetOption("hwdec", "auto-safe");
             SetOption("ytdl", "no");
             // 暂停的备用播放器也继续读取媒体，但限制前向缓存，避免下载整集。
@@ -101,6 +104,7 @@ public sealed class MpvPlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            ClearDanmakuLocked();
             _generation++;
             _entryId = -1;
             _startedEntryId = -1;
@@ -128,7 +132,8 @@ public sealed class MpvPlayer : IDisposable
             SetProperty("pause", paused ? "yes" : "no");
             SetProperty("speed", _speed.ToString("R", CultureInfo.InvariantCulture));
             SetProperty("volume", _volume.ToString("R", CultureInfo.InvariantCulture));
-            SetProperty("panscan", _fillWindow ? "1" : "0");
+            SetProperty("panscan", "0");
+            SetProperty("keepaspect", _fillWindow ? "no" : "yes");
         }
     }
 
@@ -193,8 +198,9 @@ public sealed class MpvPlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
-            // panscan 只做等比放大和裁切；完整显示仍保留原始画面比例。
-            SetProperty("panscan", fillWindow ? "1" : "0");
+            // 铺满只改变横纵缩放比例，保留包括烧录字幕在内的全部像素。
+            SetProperty("panscan", "0");
+            SetProperty("keepaspect", fillWindow ? "no" : "yes");
             _fillWindow = fillWindow;
         }
     }
@@ -204,6 +210,7 @@ public sealed class MpvPlayer : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
+            ClearDanmakuLocked();
             _generation++;
             _entryId = -1;
             _startedEntryId = -1;
@@ -380,6 +387,7 @@ public sealed class MpvPlayer : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
+            ClearDanmakuLocked();
             _disposed = true;
             _generation++;
             _cancellation.Cancel();

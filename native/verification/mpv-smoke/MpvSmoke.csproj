@@ -8,5 +8,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\Hongguo.Desktop\MpvPlayer.cs" Link="MpvPlayer.cs" />
+    <Compile Include="..\..\Hongguo.Desktop\MpvPlayer.Danmaku.cs" Link="MpvPlayer.Danmaku.cs" />
+    <Compile Include="..\..\Hongguo.Desktop\DanmakuAssRenderer.cs" Link="DanmakuAssRenderer.cs" />
+    <Compile Include="..\..\Hongguo.Desktop\DanmakuSettings.cs" Link="DanmakuSettings.cs" />
+    <Compile Include="..\..\Hongguo.Desktop\SocialModels.cs" Link="SocialModels.cs" />
   </ItemGroup>
 </Project>
